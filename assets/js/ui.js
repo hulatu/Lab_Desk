@@ -828,6 +828,7 @@
           };
         } else stale = true;
       }
+      try {
       if (an.mode === 'letters') {
         /* 字母标记需要「所有组两两比较」的完整矩阵；来源检验只比较了两组时（如 Mann–Whitney），
            就按同一方法与校正重新补全，否则缺失的比较会被误当成「无差异」。 */
@@ -838,18 +839,30 @@
         const res = complete
           ? LD.charts.computeAnnotations(ds, st().chart.enc, 'stars', method, an.adj, an.alpha, opts, 'all')
           : full;
-        letters = { map: LD.stats.compactLetters(res.labels || [], res.rows || [], an.alpha) };
+        const letterFn = LD.stats && LD.stats.compactLetters;
+        const missing = typeof letterFn !== 'function';
+        letters = missing ? null : { map: letterFn(res.labels || [], res.rows || [], an.alpha) };
         annot = [];
         const adjLabel = an.adj === 'none' ? '未校正' : an.adj === 'bonf' ? 'Bonferroni' : 'Holm';
         st()._annotNote = (stale ? '原检验结果与当前 X/Y 不一致，已按当前图表重新计算。' : '')
           + (complete ? (opts.note || '') : (res.note || ''))
-          + `；柱子上方字母不同表示差异显著，共享字母表示差异不显著（${adjLabel} 校正，α = ${an.alpha}）。`;
+          + (missing
+            ? '；字母标记模块未加载，请强制刷新页面（Ctrl / Cmd + Shift + R）后再试。'
+            : `；柱子上方字母不同表示差异显著，共享字母表示差异不显著（${adjLabel} 校正，α = ${an.alpha}）。`);
         st()._annotRows = res.rows;
       } else {
         const res = LD.charts.computeAnnotations(ds, st().chart.enc, an.mode, an.test, an.adj, an.alpha, opts, an.scope || 'sig');
         annot = res.list;
         st()._annotNote = (stale ? '原检验结果与当前 X/Y 不一致，已按当前图表重新计算。' : '') + res.note;
         st()._annotRows = res.rows;
+      }
+      } catch (err) {
+        // 标注只是装饰，任何标注计算失败都不应该让整张图消失
+        annot = [];
+        letters = null;
+        st()._annotRows = [];
+        st()._annotNote = '显著性标注计算出错：' + (err && err.message ? err.message : String(err))
+          + '。图表已按「不标注」方式绘制；可切换标注方式或清除标注来源。';
       }
     } else {
       st()._annotNote = '';
