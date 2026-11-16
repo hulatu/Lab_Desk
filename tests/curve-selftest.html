@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LabDesk 数值自测</title>
+<style>
+  :root{color-scheme:light}
+  body{margin:0 auto;max-width:860px;padding:32px 22px 56px;background:#f7f8f9;color:#15191f;
+    font:14px/1.7 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  h1{font-size:20px;margin:0 0 4px}
+  p.muted{color:#78828f;margin:0 0 20px}
+  #summary{padding:12px 16px;border-radius:8px;font-weight:600;margin-bottom:16px}
+  #summary.ok{background:#e7f6ee;color:#0a6b3d;border:1px solid #b9e3cc}
+  #summary.bad{background:#fdeaea;color:#9b1c1c;border:1px solid #f3c2c2}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e3e6eb;border-radius:8px;overflow:hidden}
+  th,td{padding:7px 10px;border-bottom:1px solid #eef0f3;text-align:left;font-size:12.5px;vertical-align:top}
+  th{background:#fafbfc;font-weight:600}
+  td.r{text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#414b57}
+  .pass{color:#0a7a45;font-weight:600}
+  .fail{color:#b42318;font-weight:600}
+  .group td{background:#f4f7f6;font-weight:600;color:#0b5d56}
+</style>
+</head>
+<body>
+<h1>LabDesk 数值自测</h1>
+<p class="muted">验证曲线平滑、基线、寻峰积分、非线性拟合与统计检验的核心计算。全部在浏览器内运行，不依赖网络。修改 <code>curve.js</code> / <code>stats.js</code> 后可直接刷新本页复跑。</p>
+<div id="summary">运行中…</div>
+<div id="out"></div>
+
+<script src="../assets/js/util.js"></script>
+<script src="../assets/js/stats.js"></script>
+<script src="../assets/js/curve.js"></script>
+<script src="../assets/js/ops.js"></script>
+<script>
+(function () {
+  const C = window.LD.curve, S = window.LD.stats, O = window.LD.ops;
+  const results = [];
+  function ok(cond, name, detail) {
+    results.push({ name, pass: !!cond, detail: detail === undefined ? '' : String(detail) });
+  }
+  function near(a, b, tol, name) {
+    ok(Math.abs(a - b) <= tol, name, `期望 ${b}, 实际 ${a}`);
+  }
+  const arr = (n, f) => Array.from({ length: n }, (_, i) => f(i));
+
+  function group(name) { results.push({ group: name }); }
+
+  group('局部多项式平滑与求导');
+  {
+    const x = arr(101, (i) => i * 0.1 - 5);
+    const y = x.map((v) => 3 + 2 * v);
+    const s = C.localPoly(x, y, 11, 1, 0);
+    let err = 0;
+    for (let i = 5; i < 95; i++) err = Math.max(err, Math.abs(s[i] - y[i]));
+    ok(err < 1e-9, '直线经 SG 平滑后不变', err);
+    const d = C.localPoly(x, y, 11, 1, 1);
+    let derr = 0;
+    for (let i = 5; i < 95; i++) derr = Math.max(derr, Math.abs(d[i] - 2));
+    ok(derr < 1e-6, '直线一阶导数等于斜率', derr);
+    const yq = x.map((v) => v * v);
+    near(C.localPoly(x, yq, 11, 2, 2)[50], 2, 1e-3, 'x² 二阶导数 ≈ 2');
+  }
+
+  group('移动平均 / 中值 / 高斯');
+  {
+    const y = new Array(50).fill(7.5);
+    ok(C.movingAverage(y, 9).every((v) => Math.abs(v - 7.5) < 1e-12), '常数序列移动平均不变');
+    ok(C.gaussianSmooth(y, 2).every((v) => Math.abs(v - 7.5) < 1e-9), '常数序列高斯平滑不变');
+    near(C.medianFilter([1, 1, 1, 100, 1, 1, 1], 5)[3], 1, 1e-12, '中值滤波剔除孤立尖峰');
+  }
+
+  group('ALS 基线');
+  {
+    const x = arr(400, (i) => i * 0.1);
+    const base = x.map((v) => 2 + 0.5 * v);
+    const y = x.map((v, i) => base[i] + 6 * Math.exp(-Math.pow(v - 20, 2) / 8));
+    const b = C.alsBaseline(y, 1e6, 0.01, 12);
+    let err = 0;
+    for (let i = 20; i < 380; i++) err = Math.max(err, Math.abs(b[i] - base[i]));
+    ok(err < 0.35, 'ALS 基线贴近真实线性基线', err);
+    near(C.maxOf(y.map((v, i) => v - b[i])), 6, 0.3, '峰顶残差保留约 6');
+  }
+
+  group('寻峰与积分');
+  {
+    const x = arr(1001, (i) => i * 0.1);
+    const pk = (mu, a, s) => (v) => a * Math.exp(-Math.pow(v - mu, 2) / (2 * s * s));
+    const y = x.map((v) => pk(20, 1, 0.6)(v) + pk(50, 2.5, 0.8)(v) + pk(75, 1.2, 0.7)(v));
+    const peaks = C.findPeaks(x, y, { relHeight: 5, distance: 5 });
+    ok(peaks.length === 3, '检出 3 个峰', peaks.length);
+    if (peaks.length === 3) {
+      near(peaks[0].x, 20, 0.2, '第一峰位置 ≈ 20');
+      near(peaks[1].y, 2.5, 0.05, '第二峰高度 ≈ 2.5');
+      ok(peaks[0].fwhm > 1 && peaks[0].fwhm < 2, '第一峰 FWHM 合理', peaks[0].fwhm);
+    }
+    near(C.integrate(x, x.map((v) => v * v), 0, 2), 8 / 3, 5e-3, '∫₀² x² dx ≈ 2.6667');
+  }
+
+  group('非线性拟合');
+  {
+    const x = arr(120, (i) => i * 0.1);
+    let r = C.fit(x, x.map((v) => 3 + 2 * v), 'linear');
+    near(r.params.a, 3, 0.05, '线性截距 ≈ 3');
+    near(r.params.b, 2, 0.01, '线性斜率 ≈ 2');
+    r = C.fit(x, x.map((v) => 5 * Math.exp(-0.7 * v) + 1), 'expdecay');
+    near(r.params.a, 5, 0.3, '指数幅度 ≈ 5');
+    near(r.params.k, 0.7, 0.03, '指数速率 ≈ 0.7');
+    r = C.fit(x, x.map((v) => 2 + 3 * Math.exp(-Math.pow(v - 5, 2) / (2 * 1.2 * 1.2))), 'gaussian');
+    near(r.params.mu, 5, 0.05, '高斯峰位 ≈ 5');
+    near(r.params.sigma, 1.2, 0.05, '高斯宽度 ≈ 1.2');
+    ok(r.r2 > 0.999, '高斯 R² > 0.999', r.r2);
+    const xd = arr(80, (i) => 0.1 + i * 0.2);
+    r = C.fit(xd, xd.map((v) => 10 + 80 / (1 + Math.pow(v / 3, 2))), 'dose4pl');
+    near(r.params.ec50, 3, 0.1, '4PL EC50 ≈ 3');
+    near(r.params.hill, 2, 0.15, '4PL Hill ≈ 2');
+  }
+
+  group('统计检验');
+  {
+    const mw = S.mannWhitney([1, 2, 3], [4, 5, 6]);
+    ok(mw.exact, '小样本 Mann–Whitney 使用精确检验');
+    near(mw.p, 0.1, 1e-9, '完全分离的 3 vs 3 精确 p = 0.1');
+    const wx = S.wilcoxon([1, 2, 3, 4, 5, 6], [0, 0, 0, 0, 0, 0]);
+    ok(wx.exact, '小样本 Wilcoxon 使用精确检验');
+    near(wx.p, 0.03125, 1e-9, 'Wilcoxon n=6 精确 p = 0.03125');
+  }
+
+  group('表达式白名单');
+  {
+    let blocked = 0;
+    ['[a]; alert(1)', 'this.constructor', '[a] = 1', 'x => x', 'Math.max([a],[b])'].forEach((e) => {
+      try { O.sanitizeExpr(e); } catch (err) { blocked++; }
+    });
+    ok(blocked === 5, '危险表达式全部被拦截', blocked + '/5');
+    let allowed = true;
+    try { O.sanitizeExpr('[a] * log10([b]) + ifnull([a], 0)'); } catch (e) { allowed = false; }
+    ok(allowed, '合法表达式可以通过');
+  }
+
+  // 渲染
+  const out = document.getElementById('out');
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  thead.innerHTML = '<tr><th>项目</th><th>结果</th><th>说明</th></tr>';
+  table.appendChild(thead);
+  const tb = document.createElement('tbody');
+  let pass = 0, fail = 0;
+  results.forEach((r) => {
+    const tr = document.createElement('tr');
+    if (r.group) {
+      tr.className = 'group';
+      tr.innerHTML = `<td colspan="3">${r.group}</td>`;
+    } else {
+      if (r.pass) pass++; else fail++;
+      tr.innerHTML = `<td>${r.name}</td><td class="${r.pass ? 'pass' : 'fail'}">${r.pass ? '通过' : '失败'}</td><td class="r">${r.detail || ''}</td>`;
+    }
+    tb.appendChild(tr);
+  });
+  table.appendChild(tb);
+  out.appendChild(table);
+
+  const sum = document.getElementById('summary');
+  sum.className = fail ? 'bad' : 'ok';
+  sum.textContent = fail
+    ? `${pass} 项通过，${fail} 项失败。请查看下方失败项。`
+    : `${pass} 项全部通过。曲线处理与拟合的核心计算正常。`;
+})();
+</script>
+</body>
+</html>

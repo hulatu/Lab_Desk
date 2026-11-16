@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LabDesk 科研数据台 · 曲线分析 · 数据处理 · 统计分析 · 出版级作图</title>
+<meta name="description" content="面向科研工作者的一站式数据处理、曲线寻峰与非线性拟合、统计分析与出版级作图工作台：多格式数据导入、图片表格识别、清洗与统计检验、期刊规范出图。">
+<!-- 标签页图标：用 data URI 内联。分享链接带 sharecode 鉴权，浏览器自发的 favicon /
+     manifest 请求不带 Referer 会被网关拦成 403，只有内联才能保证标签页一定显示图标。
+     下面的文件版链接留给直接访问域名、PWA 与社交平台抓取时使用。 -->
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IkxhYkRlc2sg56eR56CU5pWw5o2u5Y+wIj4KICA8IS0tIOiDjOaZr+eUqOe6r+iJsuiAjOmdnua4kOWPmO+8mueUn+aIkCBQTkcvSUNPIOaXtueUqOeahOWGhemDqCBTVkcg5riy5p+T5Zmo5LiN5pSv5oyB5riQ5Y+Y5byV55So77yMCiAgICAgICDkvJrmuLLmn5PmiJDpu5HlnZfjgIIxNnB4IOS4i+a4kOWPmOS5n+WHoOS5jueci+S4jeWHuu+8jOe6r+iJsuabtOa4heaZsOOAgiAtLT4KICA8cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHJ4PSIxNCIgZmlsbD0iIzBmNzY2ZSIvPgogIDwhLS0g5LiJ5qC56auY5bqm6YCS5aKe55qE5p+x5a2Q44CC5a69IDEwIC8g6Ze06LedIDTvvJrnvKnliLAgMTZweCDml7bmr4/moLnku43mnIkgMn4zIOS4quWDj+e0oO+8jAogICAgICAg5LiN5Lya57OK5oiQ5LiA5Z2X55m95paR77yI5a69IDgg5pe2IDE2cHgg5Y+q5YmpIDJweO+8jOWuueaYk+eziu+8ieOAgiAtLT4KICA8ZyBmaWxsPSIjZmZmZmZmIj4KICAgIDxyZWN0IHg9IjEzIiB5PSIzOCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEyIiByeD0iMiIvPgogICAgPHJlY3QgeD0iMjciIHk9IjI5IiB3aWR0aD0iMTAiIGhlaWdodD0iMjEiIHJ4PSIyIi8+CiAgICA8cmVjdCB4PSI0MSIgeT0iMjAiIHdpZHRoPSIxMCIgaGVpZ2h0PSIzMCIgcng9IjIiLz4KICA8L2c+CiAgPCEtLSDln7rnur8gLS0+CiAgPHJlY3QgeD0iMTMiIHk9IjUxIiB3aWR0aD0iMzgiIGhlaWdodD0iMyIgcng9IjEuNSIgZmlsbD0iI2ZmZmZmZiIgb3BhY2l0eT0iMC43Ii8+Cjwvc3ZnPgo=" type="image/svg+xml">
+<link rel="icon" href="data:image/png;base64,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" sizes="32x32" type="image/png">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="assets/img/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<!-- manifest.webmanifest 文件保留在根目录，但这里不写 link：分享链接的鉴权网关会
+     把浏览器自发的 manifest 请求（不带 Referer）拦成 403，在控制台留下一条无意义报错。
+     若将来用独立域名直接访问，再把这行 link 加回来即可。 -->
+<meta name="theme-color" content="#0f766e">
+<meta name="application-name" content="LabDesk">
+<meta name="apple-mobile-web-app-title" content="LabDesk">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">LD</div>
+    <div class="brand-text">
+      <strong>LabDesk</strong>
+      <span>科研数据台</span>
+    </div>
+  </div>
+
+  <div class="topbar-mid">
+    <label class="dataset-picker" title="切换当前数据集">
+      <span class="ds-label">数据集</span>
+      <select id="datasetSelect"></select>
+    </label>
+    <div class="dataset-meta" id="datasetMeta">尚未载入数据</div>
+  </div>
+
+  <div class="topbar-actions">
+    <button class="btn ghost" id="btnUndo" title="撤销上一步数据整理操作">撤销</button>
+    <button class="btn ghost" id="btnProject" title="导出 / 导入工程文件（含原始数据与全部设置）">工程</button>
+    <button class="btn ghost" id="btnHelp" title="使用说明与统计方法说明">说明</button>
+    <button class="btn primary" id="btnNew">导入数据</button>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="rail" id="rail">
+    <button class="rail-item" data-view="import">
+      <span class="rail-idx">1</span>
+      <span class="rail-label">数据接入</span>
+      <span class="rail-hint">文件 / 图片 / 手录</span>
+    </button>
+    <button class="rail-item" data-view="table">
+      <span class="rail-idx">2</span>
+      <span class="rail-label">数据表</span>
+      <span class="rail-hint">结构 / 质量</span>
+    </button>
+    <button class="rail-item" data-view="clean">
+      <span class="rail-idx">3</span>
+      <span class="rail-label">整理清洗</span>
+      <span class="rail-hint">缺失 / 异常 / 派生</span>
+    </button>
+    <button class="rail-item" data-view="curve">
+      <span class="rail-idx">4</span>
+      <span class="rail-label">曲线分析</span>
+      <span class="rail-hint">谱图 / 寻峰 / 拟合</span>
+    </button>
+    <button class="rail-item" data-view="stats">
+      <span class="rail-idx">5</span>
+      <span class="rail-label">统计分析</span>
+      <span class="rail-hint">检验 / 回归 / 相关</span>
+    </button>
+    <button class="rail-item" data-view="chart">
+      <span class="rail-idx">6</span>
+      <span class="rail-label">图表绘制</span>
+      <span class="rail-hint">出版级出图</span>
+    </button>
+    <button class="rail-item" data-view="report">
+      <span class="rail-idx">7</span>
+      <span class="rail-label">报告与代码</span>
+      <span class="rail-hint">复现 / 导出</span>
+    </button>
+    <div class="rail-foot">
+      <div class="pipe-title">操作记录</div>
+      <ol class="pipe-list" id="pipeList"></ol>
+    </div>
+  </nav>
+
+  <main class="main" id="main">
+
+    <!-- ============ 1 数据接入 ============ -->
+    <section class="view" id="view-import">
+      <div class="view-head">
+        <h1>数据接入</h1>
+        <p>三种入口：导入数据文件、识别图片中的表格、直接手工录入。所有解析都在你的浏览器内完成，原始数据不会离开本机；仅在使用 AI 识别与解读时，才把对应的图片或摘要发送给模型。</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head">
+            <h2>导入数据文件</h2>
+            <span class="tag">CSV / TSV / TXT / XLSX / XLS / ODS / JSON</span>
+          </div>
+          <div class="dropzone" id="fileDrop">
+            <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V4m0 0L7 9m5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            <strong>把文件拖到这里，或点击选择</strong>
+            <span>支持一次导入多个文件；Excel 多工作表会逐个列出</span>
+            <input type="file" id="fileInput" multiple accept=".csv,.tsv,.txt,.xlsx,.xls,.xlsm,.ods,.json,.numbers">
+          </div>
+          <div class="import-options">
+            <label class="field inline">
+              <span>首行为列名</span>
+              <input type="checkbox" id="optHeader" checked>
+            </label>
+            <label class="field inline">
+              <span title="0 = 自动检测；仪器导出文件可手动指定，行号从 0 开始">表头行</span>
+              <input type="number" id="optHeaderRow" min="0" max="50" step="1" value="0" style="width:56px">
+            </label>
+            <label class="field inline">
+              <span>CSV 编码</span>
+              <select id="optEncoding">
+                <option value="auto">自动检测</option>
+                <option value="utf-8">UTF-8</option>
+                <option value="gbk">GBK / GB18030</option>
+                <option value="big5">Big5</option>
+              </select>
+            </label>
+            <label class="field inline">
+              <span>数值小数点</span>
+              <select id="optDecimal">
+                <option value="dot">1.23（点）</option>
+                <option value="comma">1,23（逗号）</option>
+              </select>
+            </label>
+          </div>
+          <div class="hint-box">
+            <strong>关于 .numbers / .sav / .dta：</strong>
+            Apple Numbers、SPSS、Stata 的专有二进制格式浏览器无法直接解析。请在原软件中「导出 / 另存为」为 <code>.xlsx</code> 或 <code>.csv</code> 后再导入，数据不会有任何损失。
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>识别图片中的表格</h2>
+            <span class="tag ai">AI 视觉识别</span>
+          </div>
+          <div class="dropzone compact" id="imgDrop">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5L5 20"/></svg>
+            <strong>上传实验记录照片 / 截图 / 扫描件</strong>
+            <span>手写记录本、仪器打印条、论文插图均可</span>
+            <input type="file" id="imgInput" accept="image/*">
+          </div>
+          <div class="ocr-config">
+            <label class="field">
+              <span>识别偏好</span>
+              <select id="ocrHint">
+                <option value="hand">手写实验记录（数字为主）</option>
+                <option value="print">打印 / 截图表格（含中英文字段）</option>
+                <option value="mixed">混合内容，尽量全保留</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>单位与备注</span>
+              <input type="text" id="ocrUnitHint" placeholder="如：浓度 mmol/L，温度 ℃（可留空）">
+            </label>
+          </div>
+          <div class="ocr-actions">
+            <button class="btn primary" id="btnOcr" disabled>开始识别</button>
+            <button class="btn ghost" id="btnOcrLocal" disabled title="不联网的备用识别，仅适合印刷体，准确率有限">本地备用识别</button>
+            <span class="ocr-status" id="ocrStatus"></span>
+          </div>
+          <div class="ai-availability" id="aiAvailability">正在检测 AI 识别服务…</div>
+        </div>
+      </div>
+
+      <div class="card" id="ocrReviewCard" hidden>
+        <div class="card-head">
+          <h2>识别结果校对</h2>
+          <span class="tag warn">请务必核对后再入库</span>
+        </div>
+        <p class="muted small">图片识别无法保证 100% 准确，尤其是手写数字（1/7、0/6、5/S 易混）。下表可直接编辑，确认无误后点击「载入为数据集」。原始图片保留在右侧供对照。</p>
+        <div class="ocr-review">
+          <div class="ocr-image-pane"><img id="ocrPreview" alt="待识别图片"></div>
+          <div class="ocr-table-pane"><div class="table-wrap" id="ocrGrid"></div></div>
+        </div>
+        <div class="card-actions">
+          <button class="btn primary" id="btnOcrAccept">载入为数据集</button>
+          <button class="btn ghost" id="btnOcrAddRow">增加一行</button>
+          <button class="btn ghost" id="btnOcrAddCol">增加一列</button>
+          <button class="btn ghost" id="btnOcrDiscard">丢弃</button>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h2>手工录入</h2><span class="tag">粘贴即解析</span></div>
+          <p class="muted small">从 Excel、Word 表格或 PDF 里复制的文本可以直接粘贴到下方（支持制表符、逗号、分号、多个空格分隔）。</p>
+          <textarea id="pasteArea" class="code-input" rows="8" placeholder="处理温度(℃)	时间(min)	产率(%)
+25	30	68.2
+40	30	74.5
+55	30	81.9"></textarea>
+          <div class="card-actions">
+            <button class="btn primary" id="btnPaste">解析粘贴内容</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>示例数据</h2><span class="tag">先熟悉流程</span></div>
+          <p class="muted small">载入内置示例可立即体验完整链路：清洗 → 描述统计 → 单因素方差分析 → 出版级柱状图。</p>
+          <div class="sample-list" id="sampleList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 2 数据表 ============ -->
+    <section class="view" id="view-table" hidden>
+      <div class="view-head">
+        <h1>数据表</h1>
+        <p>检查列类型推断是否合理。类型直接决定后续能做哪些统计与图表——把本该是数值的列修正为「数值」后，统计与绘图选项才会解锁。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>列结构</h2>
+          <div class="head-tools">
+            <input type="search" id="colSearch" placeholder="搜索列名">
+            <button class="btn ghost sm" id="btnAutoType">重新推断类型</button>
+          </div>
+        </div>
+        <div class="table-wrap" id="columnProfile"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>数据预览</h2>
+          <div class="head-tools">
+            <span class="muted small" id="previewInfo"></span>
+            <button class="btn ghost sm" id="btnExportCsv">导出当前数据</button>
+          </div>
+        </div>
+        <div class="table-wrap tall" id="dataPreview"></div>
+      </div>
+    </section>
+
+    <!-- ============ 3 整理清洗 ============ -->
+    <section class="view" id="view-clean" hidden>
+      <div class="view-head">
+        <h1>整理清洗</h1>
+        <p>先看「数据体检」——它会逐列检查缺失、重复、类型和离群点，每条问题后面都给出可以直接点的修法。也可以从下面的操作清单里自己挑。所有操作只作用于工作副本，原始数据始终保留，随时可撤销。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>数据体检</h2>
+          <span class="tag" id="auditSummary">检查中…</span>
+        </div>
+        <div id="auditList" class="audit-list"></div>
+      </div>
+
+      <div class="clean-layout">
+        <aside class="clean-nav">
+          <input class="clean-search" id="opSearch" type="search" placeholder="搜索操作，如「缺失」「分箱」" autocomplete="off">
+          <div class="clean-nav-inner" id="opNav"></div>
+        </aside>
+        <div class="clean-stage">
+          <div class="op-panel" id="opPanel" data-op="missing"></div>
+          <div class="card">
+            <div class="card-head">
+              <h2>当前数据预览</h2>
+              <span class="tag" id="previewMeta">—</span>
+            </div>
+            <div class="table-wrap" id="cleanPreview"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>操作记录</h2><span class="tag" id="pipeCount">0 步</span></div>
+        <div id="pipeDetail" class="pipe-detail"></div>
+      </div>
+    </section>
+
+    <!-- ============ 4 曲线分析 ============ -->
+    <section class="view" id="view-curve" hidden>
+      <div class="view-head">
+        <h1>曲线分析</h1>
+        <p>把两列「x–y」数据当成一条实验曲线来处理：裁剪、平滑、基线校正、求导、归一化、寻峰积分与非线性拟合。处理顺序固定为「裁剪 → 基线 → 平滑 → 求导 → 归一化」，每一步都是可逆的参数，不会改动原始数据。</p>
+      </div>
+
+      <div class="chart-layout">
+        <div class="chart-side">
+          <div class="card tight">
+            <div class="card-head"><h2>数据映射</h2></div>
+            <div id="curveMap" class="encoding-panel"></div>
+          </div>
+
+          <div class="card tight">
+            <div class="card-head"><h2>预处理</h2><button class="btn ghost sm" id="btnCurveReset">复位</button></div>
+            <div id="curvePre" class="style-panel"></div>
+          </div>
+
+          <div class="card tight">
+            <div class="card-head"><h2>寻峰与积分</h2></div>
+            <div id="curvePeaks" class="style-panel"></div>
+          </div>
+
+          <div class="card tight">
+            <div class="card-head"><h2>非线性拟合</h2></div>
+            <div id="curveFit" class="style-panel"></div>
+          </div>
+
+          <div class="card tight">
+            <div class="card-head"><h2>出图样式</h2><button class="btn ghost sm" id="btnCurveStyleReset">复位</button></div>
+            <div id="curveStyle" class="style-panel"></div>
+          </div>
+        </div>
+
+        <div class="chart-main curve-main">
+          <div class="card tight">
+            <div class="card-head">
+              <h2>曲线预览</h2>
+              <div class="head-tools">
+                <button class="btn ghost sm" id="btnCurvePng">PNG</button>
+                <button class="btn ghost sm" id="btnCurveSvg">SVG</button>
+                <button class="btn ghost sm" id="btnCurvePdf">PDF</button>
+                <button class="btn ghost sm" id="btnCurveCsv">数据 CSV</button>
+                <button class="btn ghost sm" id="btnCurveCode">拟合代码</button>
+              </div>
+            </div>
+            <div class="canvas-shell">
+              <div id="curveCanvas" class="chart-canvas"></div>
+            </div>
+            <div class="chart-foot"><span class="muted small" id="curveNote"></span></div>
+          </div>
+
+          <div class="card tight" id="curveResidualCard" hidden>
+            <div class="card-head"><h2>残差</h2><span class="tag">拟合值 − 观测值</span></div>
+            <div class="canvas-shell">
+              <div id="curveResidual" class="chart-canvas" style="height:150px"></div>
+            </div>
+          </div>
+
+          <div class="card tight">
+            <div class="card-head">
+              <h2>峰列表</h2>
+              <div class="head-tools">
+                <button class="btn ghost sm" id="btnCurveCopyPeaks">复制</button>
+                <button class="btn ghost sm" id="btnCurvePeaksCsv">CSV</button>
+              </div>
+            </div>
+            <div class="table-wrap" id="curvePeakTable"></div>
+          </div>
+
+          <div class="card tight" id="curveFitCard">
+            <div class="card-head"><h2>拟合结果</h2><span class="tag" id="curveFitTag">未拟合</span></div>
+            <div id="curveFitTable" class="table-wrap"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 5 统计分析 ============ -->
+    <section class="view" id="view-stats" hidden>
+      <div class="view-head">
+        <h1>统计分析</h1>
+        <p>选择变量后，系统会检查数据类型、正态性与方差齐性，给出可用检验方法与推荐理由；不满足前提时会明确提示应改用哪种非参数方法。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>描述统计</h2><div class="head-tools"><button class="btn ghost sm" id="btnDescAll">全部数值列</button></div></div>
+        <div class="table-wrap" id="descTable"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>假设检验</h2><span class="tag">自动前提检查</span></div>
+        <div class="form-row" id="testForm">
+          <label class="field"><span>检验族</span><select id="testFamily"></select></label>
+          <label class="field"><span>因变量（数值）</span><select id="testY"></select></label>
+          <label class="field"><span>分组变量（分类）</span><select id="testG"></select></label>
+          <label class="field" id="testXWrap" hidden><span>第二变量 / 配对列</span><select id="testX"></select></label>
+          <label class="field"><span>显著性水平 α</span><select id="testAlpha"><option>0.05</option><option>0.01</option><option>0.001</option></select></label>
+          <button class="btn primary" id="btnRunTest">运行分析</button>
+        </div>
+        <div id="testResult" class="result-pane muted">选择变量后运行分析。</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>AI 结果解读</h2><span class="tag ai">可选</span></div>
+        <p class="muted small">把上一步的统计结果交给模型，生成可直接写入论文的规范表述（含统计量、自由度、p 值与效应量），并提示需要注意的假设问题。</p>
+        <div class="card-actions">
+          <button class="btn" id="btnInterpret" disabled>生成规范表述</button>
+          <span class="muted small" id="interpretStatus"></span>
+        </div>
+        <div id="interpretOut" class="prose"></div>
+      </div>
+    </section>
+
+    <!-- ============ 5 图表绘制 ============ -->
+    <section class="view" id="view-chart" hidden>
+      <div class="view-head">
+        <h1>图表绘制</h1>
+        <p>图表类型会根据当前数据的列类型自动启用或禁用。尺寸、字号、线宽、配色均按期刊投稿要求设置，可导出矢量 SVG、600 dpi PNG，或按真实物理尺寸打印为 PDF。</p>
+      </div>
+
+      <div class="chart-layout">
+        <div class="chart-side">
+          <div class="card tight">
+            <div class="card-head"><h2>图表类型</h2></div>
+            <div class="type-grid" id="typeGrid"></div>
+            <div class="type-reason" id="typeReason"></div>
+          </div>
+
+          <div class="card tight">
+            <div class="card-head"><h2>数据映射</h2></div>
+            <div id="encodingPanel" class="encoding-panel"></div>
+          </div>
+
+          <div class="card tight">
+            <div class="card-head"><h2>出版样式</h2><button class="btn ghost sm" id="btnStyleReset">复位</button></div>
+            <div id="stylePanel" class="style-panel"></div>
+          </div>
+        </div>
+
+        <div class="chart-main">
+          <div class="card tight">
+            <div class="card-head">
+              <h2 id="chartTitle">图表预览</h2>
+              <div class="head-tools">
+                <button class="btn ghost sm" id="btnChartPng">PNG</button>
+                <button class="btn ghost sm" id="btnChartSvg">SVG</button>
+                <button class="btn ghost sm" id="btnChartPdf">PDF</button>
+                <button class="btn ghost sm" id="btnChartCode">出图代码</button>
+              </div>
+            </div>
+            <div class="canvas-shell">
+              <div id="chartCanvas" class="chart-canvas"></div>
+            </div>
+            <div class="chart-foot">
+              <span class="muted small" id="chartNote"></span>
+            </div>
+          </div>
+
+          <div class="card tight" id="statAnnotCard">
+            <div class="card-head"><h2>显著性标注</h2><span class="tag">自动两两比较</span></div>
+            <div class="form-row compact">
+              <label class="field"><span>标注方式</span>
+                <select id="annotMode">
+                  <option value="none">不标注</option>
+                  <option value="stars">星号（* / ** / ***）</option>
+                  <option value="p">p 值</option>
+                </select>
+              </label>
+              <label class="field"><span>比较方法</span>
+                <select id="annotTest">
+                  <option value="auto">自动（按正态性）</option>
+                  <option value="welch">Welch t 检验</option>
+                  <option value="mw">Mann-Whitney U</option>
+                </select>
+              </label>
+              <label class="field"><span>多重比较校正</span>
+                <select id="annotAdj">
+                  <option value="holm">Holm</option>
+                  <option value="bonf">Bonferroni</option>
+                  <option value="none">不校正</option>
+                </select>
+              </label>
+            </div>
+            <div id="annotOut" class="muted small"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 6 报告与代码 ============ -->
+    <section class="view" id="view-report" hidden>
+      <div class="view-head">
+        <h1>报告与代码</h1>
+        <p>把当前数据、清洗步骤、统计结果与图表汇总成一份可交付的报告；同时生成等价的 Python / R 脚本，保证分析过程在论文附录或他人机器上可完整复现。</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-head"><h2>分析报告</h2>
+            <div class="head-tools">
+              <button class="btn ghost sm" id="btnReportHtml">导出 HTML</button>
+              <button class="btn ghost sm" id="btnReportMd">复制 Markdown</button>
+            </div>
+          </div>
+          <p class="muted small">包含数据来源、清洗步骤、描述统计、检验结果与图注，可直接粘进实验记录或补充材料。</p>
+          <div class="card-actions">
+            <button class="btn primary" id="btnBuildReport">生成报告</button>
+            <button class="btn ghost" id="btnAiCaption" disabled>AI 撰写图注</button>
+          </div>
+          <div id="reportPreview" class="report-preview"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>复现代码</h2>
+            <div class="head-tools">
+              <button class="btn ghost sm" id="btnCopyPy">复制 Python</button>
+              <button class="btn ghost sm" id="btnCopyR">复制 R</button>
+            </div>
+          </div>
+          <div class="tabs" id="codeTabs">
+            <button class="tab active" data-lang="py">Python</button>
+            <button class="tab" data-lang="r">R</button>
+          </div>
+          <pre class="code-block" id="codeOut"></pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>导出</h2></div>
+        <div class="export-row">
+          <button class="btn" id="btnExportXlsx">处理后数据（.xlsx）</button>
+          <button class="btn" id="btnExportCsv2">处理后数据（.csv）</button>
+          <button class="btn" id="btnExportProject">完整工程（.json）</button>
+          <button class="btn" id="btnExportRaw">原始数据（未清洗）</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-empty">
+      <div class="empty-state">
+        <div class="empty-mark">LD</div>
+        <h1>还没有载入数据</h1>
+        <p>从导入一个 CSV / Excel 文件开始，或者先载入示例数据把整条链路走一遍。</p>
+        <div class="card-actions center">
+          <button class="btn primary" data-goto="import">去导入数据</button>
+        </div>
+        <ul class="empty-points">
+          <li><strong>导入</strong>　CSV、TSV、Excel、ODS、JSON，或从图片识别手写记录</li>
+          <li><strong>整理</strong>　缺失值、异常值、类型修正、计算列、分组聚合、宽长表转换</li>
+          <li><strong>曲线</strong>　谱图平滑、基线校正、寻峰积分与非线性拟合（指数 / Logistic / 高斯 / 4PL 等）</li>
+          <li><strong>分析</strong>　描述统计、正态性检验、t 检验、方差分析、非参数检验、相关、回归</li>
+          <li><strong>出图</strong>　柱状、折线、散点、箱线、小提琴、热力、饼图等，矢量导出</li>
+        </ul>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toastHost" class="toast-host"></div>
+<div id="modalHost" class="modal-host" hidden></div>
+
+<script src="assets/js/vendor/echarts.min.js"></script>
+<script src="assets/js/vendor/xlsx.full.min.js"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/stats.js"></script>
+<script src="assets/js/parse.js"></script>
+<script src="assets/js/ops.js"></script>
+<script src="assets/js/charts.js"></script>
+<script src="assets/js/codegen.js"></script>
+<script src="assets/js/ai.js"></script>
+<script src="assets/js/report.js"></script>
+<script src="assets/js/curve.js"></script>
+<script src="assets/js/clean.js"></script>
+<script src="assets/js/curve-ui.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
