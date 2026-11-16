@@ -125,7 +125,7 @@
     const table = h('table');
     table.appendChild(h('thead', h('tr',
       h('th', '列名'), h('th', '类型'), h('th.num', '有效'), h('th.num', '缺失'),
-      h('th.num', '唯一值'), h('th', '示例值'), h('th', '完整度'))));
+      h('th.num', '唯一值'), h('th', '示例值'), h('th', '完整度'), h('th', '操作'))));
     const tbody = h('tbody');
     ds.columns.forEach((c, i) => {
       if (search && !c.name.toLowerCase().includes(search)) return;
@@ -149,7 +149,8 @@
         h('td', { style: { maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis' } }, sample || '—'),
         h('td', h('div.quality-bar',
           h('div.track', h('i', { style: { width: (rate * 100).toFixed(0) + '%' } })),
-          h('span.muted.small', (rate * 100).toFixed(0) + '%')))));
+          h('span.muted.small', (rate * 100).toFixed(0) + '%'))),
+        h('td', h('button.btn.ghost.sm', { 'data-act': 'dropColumn', 'data-col': c.name, title: '删除这一列（可在整理记录里撤回）' }, '删除'))));
     });
     table.appendChild(tbody);
     wrap.innerHTML = '';
@@ -290,38 +291,109 @@
      ================================================================== */
   function renderDescTable() {
     const wrap = $('#descTable');
-    const rows = st().descRows;
-    if (!rows || !rows.length) {
+    const ds = LD.app.workDataset();
+    const sel = $('#descGroup');
+    if (!ds) {
+      if (sel) sel.innerHTML = '';
       wrap.innerHTML = '';
       wrap.appendChild(h('p.muted.small', { style: { padding: '12px' } }, '当前数据集没有数值列，或尚未载入数据。'));
       return;
     }
+    const nums = LD.app.numNames(ds);
+    const groupOpts = LD.charts.groupCandidates ? LD.charts.groupCandidates(ds) : [];
+    if (sel) {
+      const prev = st().descGroup || '';
+      sel.innerHTML = '';
+      sel.appendChild(h('option', { value: '' }, '不分组'));
+      groupOpts.forEach((n) => sel.appendChild(h('option', { value: n }, '按「' + n + '」分组')));
+      sel.value = groupOpts.includes(prev) ? prev : '';
+      sel.disabled = !groupOpts.length;
+      st().descGroup = sel.value;
+    }
+    const gName = sel ? sel.value : '';
+    const gi = gName ? ds.columns.findIndex((c) => c.name === gName) : -1;
+
+    if (!nums.length) {
+      wrap.innerHTML = '';
+      wrap.appendChild(h('p.muted.small', { style: { padding: '12px' } }, '当前数据集没有数值列。'));
+      st()._descTable = null;
+      return;
+    }
+
     const table = h('table');
-    table.appendChild(h('thead', h('tr',
-      ['变量', 'n', '缺失', '均值', '标准差', '标准误', '中位数', 'Q1', 'Q3', '最小值', '最大值', '95% CI', 'CV', '偏度', '峰度']
-        .map((t, i) => h('th' + (i > 0 ? '.num' : ''), t)))));
     const tb = h('tbody');
-    rows.forEach((d) => {
-      tb.appendChild(h('tr',
-        h('td', h('strong', d.name)),
-        h('td.num', String(d.n)),
-        h('td.num', d.missing ? String(d.missing) : '—'),
-        h('td.num', U.fmt(d.mean, 4)),
-        h('td.num', U.fmt(d.sd, 4)),
-        h('td.num', U.fmt(d.se, 4)),
-        h('td.num', U.fmt(d.median, 4)),
-        h('td.num', U.fmt(d.q1, 3)),
-        h('td.num', U.fmt(d.q3, 3)),
-        h('td.num', U.fmt(d.min, 3)),
-        h('td.num', U.fmt(d.max, 3)),
-        h('td.num', `${U.fmt(d.ciLow, 3)} ~ ${U.fmt(d.ciHigh, 3)}`),
-        h('td.num', U.fmt(d.cv, 3)),
-        h('td.num', U.fmt(d.skew, 2)),
-        h('td.num', U.fmt(d.kurt, 2))));
-    });
+
+    if (gi < 0) {
+      table.appendChild(h('thead', h('tr',
+        ['变量', 'n', '缺失', '均值', '标准差', '标准误', '中位数', 'Q1', 'Q3', '最小值', '最大值', '95% CI', 'CV', '偏度', '峰度']
+          .map((t, i) => h('th' + (i > 0 ? '.num' : ''), t)))));
+      const out = [];
+      nums.forEach((name) => {
+        const i = ds.columns.findIndex((c) => c.name === name);
+        const d = LD.stats.describe(ds.rows.map((r) => r[i]));
+        out.push([name, d.n, d.missing, d.mean, d.sd, d.se, d.median, d.q1, d.q3, d.min, d.max,
+          `${U.fmt(d.ciLow, 3)} ~ ${U.fmt(d.ciHigh, 3)}`, d.cv, d.skew, d.kurt]);
+        tb.appendChild(h('tr',
+          h('td', h('strong', name)),
+          h('td.num', String(d.n)),
+          h('td.num', d.missing ? String(d.missing) : '—'),
+          h('td.num', U.fmt(d.mean, 4)),
+          h('td.num', U.fmt(d.sd, 4)),
+          h('td.num', U.fmt(d.se, 4)),
+          h('td.num', U.fmt(d.median, 4)),
+          h('td.num', U.fmt(d.q1, 3)),
+          h('td.num', U.fmt(d.q3, 3)),
+          h('td.num', U.fmt(d.min, 3)),
+          h('td.num', U.fmt(d.max, 3)),
+          h('td.num', `${U.fmt(d.ciLow, 3)} ~ ${U.fmt(d.ciHigh, 3)}`),
+          h('td.num', U.fmt(d.cv, 3)),
+          h('td.num', U.fmt(d.skew, 2)),
+          h('td.num', U.fmt(d.kurt, 2))));
+      });
+      st()._descTable = { columns: ['变量', 'n', '缺失', '均值', '标准差', '标准误', '中位数', 'Q1', 'Q3', '最小值', '最大值', '95% CI', 'CV', '偏度', '峰度'], rows: out };
+    } else {
+      // 分组描述：论文 Table 1 最常见的形式，先按组别给 n / 均值 ± 标准差，再给中位数与 95% CI
+      table.appendChild(h('thead', h('tr',
+        [['变量'], [gName], ['n'], ['均值'], ['标准差'], ['标准误'], ['中位数'], ['95% CI'], ['最小值'], ['最大值']]
+          .map((t, i) => h('th' + (i > 1 && i !== 2 ? '.num' : ''), t)))));
+      const levels = Array.from(new Set(ds.rows.map((r) => r[gi]).filter((v) => v !== null && v !== undefined && v !== '')
+        .map((v) => String(v))));
+      levels.sort((a, b) => {
+        const na = Number(a), nb = Number(b);
+        return isFinite(na) && isFinite(nb) ? na - nb : a.localeCompare(b, 'zh-CN');
+      });
+      const out = [];
+      nums.filter((n) => n !== gName).forEach((name) => {
+        const i = ds.columns.findIndex((c) => c.name === name);
+        levels.forEach((lv) => {
+          const vals = ds.rows.filter((r) => String(r[gi]) === lv).map((r) => r[i]);
+          const d = LD.stats.describe(vals);
+          out.push([name, lv, d.n, d.mean, d.sd, d.se, d.median, `${U.fmt(d.ciLow, 3)} ~ ${U.fmt(d.ciHigh, 3)}`, d.min, d.max]);
+          tb.appendChild(h('tr',
+            h('td', h('strong', name)),
+            h('td', lv),
+            h('td.num', String(d.n)),
+            h('td.num', U.fmt(d.mean, 4)),
+            h('td.num', U.fmt(d.sd, 4)),
+            h('td.num', U.fmt(d.se, 4)),
+            h('td.num', U.fmt(d.median, 4)),
+            h('td.num', `${U.fmt(d.ciLow, 3)} ~ ${U.fmt(d.ciHigh, 3)}`),
+            h('td.num', U.fmt(d.min, 3)),
+            h('td.num', U.fmt(d.max, 3))));
+        });
+      });
+      st()._descTable = { columns: ['变量', gName, 'n', '均值', '标准差', '标准误', '中位数', '95% CI', '最小值', '最大值'], rows: out };
+    }
     table.appendChild(tb);
     wrap.innerHTML = '';
     wrap.appendChild(table);
+    st()._descGrouped = gi >= 0;
+  }
+
+  function descTableTsv() {
+    const t = st()._descTable;
+    if (!t) return '';
+    return [t.columns.join('\t')].concat(t.rows.map((r) => r.join('\t'))).join('\n');
   }
 
   function familyByKey(k) { return LD.app.FAMILIES.find((f) => f.key === k) || LD.app.FAMILIES[0]; }
@@ -443,6 +515,47 @@
         h('select', { id: 'extra_xs', multiple: true, size: Math.min(4, Math.max(2, candidates.length)) },
           candidates.map((n) => h('option', { value: n, selected: candidates.indexOf(n) < 2 }, n)))));
     }
+
+    renderTestHint(fam);
+  }
+
+  /** 在表单下方显示「几组、每组几个、缺多少」，避免跑完才发现某组只有 1 个样本 */
+  function renderTestHint(fam) {
+    const host = $('#testHint');
+    if (!host) return;
+    const ds = LD.app.workDataset();
+    if (!ds) { host.textContent = ''; return; }
+    const f = fam || familyByKey($('#testFamily').value);
+    const yName = $('#testY').value;
+    const gName = f.g ? $('#testG').value : '';
+    const yi = ds.columns.findIndex((c) => c.name === yName);
+    const gi = gName ? ds.columns.findIndex((c) => c.name === gName) : -1;
+    if (yi < 0) { host.textContent = '请选择变量。'; return; }
+    const parts = [];
+    let bad = false;
+    if (gi >= 0) {
+      const counts = new Map();
+      let total = 0;
+      ds.rows.forEach((r) => {
+        const v = r[gi];
+        if (v === null || v === undefined || v === '') return;
+        const num = LD.util.parseNum(r[yi]);
+        if (!isFinite(num)) return;
+        const k = String(v);
+        counts.set(k, (counts.get(k) || 0) + 1);
+        total++;
+      });
+      const list = Array.from(counts.entries());
+      bad = list.some(([, n]) => n < 2);
+      parts.push(`${list.length} 组，有效观测 ${total}`);
+      parts.push(list.map(([k, n]) => `${k}=${n}`).join('，'));
+    } else {
+      const ok = ds.rows.filter((r) => isFinite(LD.util.parseNum(r[yi]))).length;
+      bad = ok < 3;
+      parts.push(`有效观测 ${ok}（缺失 ${ds.rows.length - ok}）`);
+    }
+    host.textContent = parts.join('；');
+    host.className = 'test-hint' + (bad ? ' warn' : '');
   }
 
   function renderTestResult() {
@@ -479,6 +592,16 @@
     if (r.conclusion) {
       host.appendChild(h('div.verdict' + (r.level === 'ok' ? '.ok' : r.level === 'warn' ? '.warn' : '.bad'), r.conclusion));
     }
+    const spec = r.spec;
+    if (spec && spec.g) {
+      host.appendChild(h('div.res-actions',
+        h('button.btn.primary.sm', { 'data-act': 'plotTest', 'data-id': lt.id, 'data-kind': 'bar' }, '用这个结果出柱状图'),
+        h('button.btn.ghost.sm', { 'data-act': 'plotTest', 'data-id': lt.id, 'data-kind': 'box' }, '箱线图'),
+        h('button.btn.ghost.sm', { 'data-act': 'plotTest', 'data-id': lt.id, 'data-kind': 'violin' }, '小提琴图')));
+    } else if (spec && (spec.family === 'corr' || spec.family === 'reg')) {
+      host.appendChild(h('div.res-actions',
+        h('button.btn.primary.sm', { 'data-act': 'plotTest', 'data-id': lt.id }, '用这个结果出散点图 + 拟合线')));
+    }
     if (r.text) {
       host.appendChild(h('div', { style: { marginTop: '10px' } },
         h('div.small.muted', { style: { marginBottom: '4px' } }, '规范表述（可直接用于论文）'),
@@ -497,6 +620,39 @@
     renderDescTable();
     renderTestForm();
     renderTestResult();
+    renderResults();
+  }
+
+  /** 分析结果工作台：保留最近若干次检验，可随时回看、直接出图或删除 */
+  function renderResults() {
+    const list = $('#resultsList');
+    if (!list) return;
+    const rows = LD.app.visibleResults();
+    const cnt = $('#resultsCount');
+    if (cnt) cnt.textContent = String(rows.length);
+    list.innerHTML = '';
+    if (!rows.length) {
+      list.appendChild(h('p.muted.small', { style: { margin: 0 } }, '还没有分析结果。运行一次假设检验后会出现在这里。'));
+      return;
+    }
+    const lt = st().lastTest;
+    rows.forEach((r) => {
+      const rd = r.render || {};
+      const d = new Date(r.at);
+      const time = isNaN(d.getTime()) ? '' : `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      const tag = rd.level === 'ok' ? '显著' : rd.level === 'warn' ? '需注意' : '无法计算';
+      const item = h('div.result-item' + (lt && lt.id === r.id ? '.active' : ''),
+        h('div.result-main',
+          h('div.result-title', rd.title || '分析结果'),
+          h('div.small.muted', [time, tag].filter(Boolean).join(' · '))),
+        h('div.result-acts',
+          h('button.btn.ghost.sm', { 'data-act': 'viewResult', 'data-id': r.id }, '查看'),
+          (rd.spec && (rd.spec.g || rd.spec.family === 'corr' || rd.spec.family === 'reg'))
+            ? h('button.btn.primary.sm', { 'data-act': 'plotTest', 'data-id': r.id, 'data-kind': 'bar' }, '出图')
+            : null,
+          h('button.btn.ghost.sm', { 'data-act': 'removeResult', 'data-id': r.id }, '删除')));
+      list.appendChild(item);
+    });
   }
 
   /* ==================================================================
@@ -650,10 +806,26 @@
     const type = st().chart.type;
     let annot = null;
     const an = st().annot;
-    if (an.mode !== 'none' && ['bar', 'barH'].includes(type)) {
-      const res = LD.charts.computeAnnotations(ds, st().chart.enc, an.mode, an.test, an.adj, an.alpha);
+    if (an.mode !== 'none' && ['bar', 'barH', 'box', 'violin'].includes(type)) {
+      let opts = null;
+      let stale = false;
+      if (an.sourceId) {
+        const src = LD.app.resultById(an.sourceId);
+        const spec = src && src.render && src.render.spec;
+        const pairs = src && src.render && src.render.pairs;
+        if (src && spec && pairs && pairs.length
+          && spec.g === st().chart.enc.x && spec.y === st().chart.enc.y) {
+          const sig = pairs.filter((r) => r.pAdj < an.alpha).length;
+          const adjLabel = spec.adjust === 'none' ? '未校正' : spec.adjust === 'bonf' ? 'Bonferroni' : 'Holm';
+          opts = {
+            rows: pairs, method: spec.method,
+            note: `来自「${src.render.title}」的 ${spec.method === 'mw' ? 'Mann–Whitney U' : 'Welch t'} 两两比较，${adjLabel} 校正；${sig}/${pairs.length} 对显著（α = ${an.alpha}）。`,
+          };
+        } else stale = true;
+      }
+      const res = LD.charts.computeAnnotations(ds, st().chart.enc, an.mode, an.test, an.adj, an.alpha, opts);
       annot = res.list;
-      st()._annotNote = res.note;
+      st()._annotNote = (stale ? '原检验结果与当前 X/Y 不一致，已按当前图表重新计算。' : '') + res.note;
       st()._annotRows = res.rows;
     } else {
       st()._annotNote = '';
@@ -697,15 +869,24 @@
     const card = $('#statAnnotCard');
     if (!card) return;
     const type = st().chart.type;
-    const supported = ['bar', 'barH'].includes(type);
+    const supported = ['bar', 'barH', 'box', 'violin'].includes(type);
     card.hidden = !supported;
     if (!supported) return;
     const an = st().annot;
     $('#annotMode').value = an.mode;
     $('#annotTest').value = an.test;
     $('#annotAdj').value = an.adj;
+    const fromTest = !!(an.sourceId && LD.app.resultById(an.sourceId));
+    ['annotMode', 'annotTest', 'annotAdj'].forEach((id) => {
+      const el = $('#' + id);
+      if (el) el.disabled = fromTest;
+    });
     const out = $('#annotOut');
     out.textContent = st()._annotNote || (an.mode === 'none' ? '选择标注方式后，会自动对各组做两两比较并绘制显著性括号。' : '');
+    if (fromTest) {
+      out.appendChild(h('div', { style: { marginTop: '6px' } },
+        h('button.btn.ghost.sm', { 'data-act': 'clearAnnotSource' }, '清除标注来源，改为按图表重算')));
+    }
     if (an.mode !== 'none' && st()._annotRows && st()._annotRows.length) {
       const rows = st()._annotRows;
       out.appendChild(h('div', { style: { marginTop: '8px' } },
@@ -776,6 +957,7 @@
       pipeline: LD.app.pipeline(),
       descRows: st().descRows,
       lastTest: st().lastTest,
+      results: LD.app.visibleResults(),
       interpretation: st().interpretation,
       curve,
       curveAnalysis,
@@ -848,8 +1030,48 @@
     copyText(el) {
       U.copyText(el.dataset.text || '').then(() => U.toast('已复制', 'ok'));
     },
-    removeDataset() {
-      const e = LD.app.activeEntry();
+    copyDesc() {
+      const tsv = descTableTsv();
+      if (!tsv) { U.toast('当前没有可复制的描述统计表', 'warn'); return; }
+      U.copyText(tsv).then(() => U.toast('已复制，可直接粘贴到 Excel / Word', 'ok'));
+    },
+    plotTest(el) {
+      LD.app.plotTestResult(el.dataset.id, el.dataset.kind);
+    },
+    viewResult(el) {
+      const r = LD.app.resultById(el.dataset.id);
+      if (!r) return;
+      st().lastTest = r;
+      st().interpretation = '';
+      renderStats();
+      LD.app.persist();
+    },
+    removeResult(el) {
+      LD.app.removeResult(el.dataset.id);
+    },
+    clearResults() {
+      const n = LD.app.visibleResults().length;
+      if (!n) { U.toast('当前数据集还没有分析结果', 'warn'); return; }
+      U.modal('清空分析结果', h('p', `确定清空当前数据集的 ${n} 条分析结果吗？图表上的显著性标注来源也会一并清除。`), [
+        { label: '取消' },
+        { label: '清空', primary: true, onClick: () => LD.app.clearResults() },
+      ]);
+    },
+    clearAnnotSource() {
+      st().annot.sourceId = null;
+      renderChartView();
+      LD.app.persist();
+      U.toast('已改为按当前图表重新计算显著性', 'ok');
+    },
+    dropColumn(el) {
+      const name = el.dataset.col;
+      if (!name) return;
+      U.modal('删除列', h('p', `确定从工作数据中删除「${name}」吗？这会记作一条整理步骤，可在左栏的整理记录里撤回。`), [
+        { label: '取消' },
+        { label: '删除', primary: true, onClick: () => LD.app.pushOp('dropcol', { cols: [name] }) },
+      ]);
+    },
+    removeDataset() {      const e = LD.app.activeEntry();
       if (!e) return;
       U.modal('移除数据集', h('p', `确定移除「${e.ds.name}」吗？该操作不可撤销（工程文件中也不会再包含它）。`), [
         { label: '取消' },
@@ -1062,7 +1284,13 @@
       const v = el.value.trim();
       e.ds.rows[r][c] = v === '' ? null : (col.type === 'number' ? U.parseNum(v) : v);
       if (col.type === 'number' && Number.isNaN(e.ds.rows[r][c])) e.ds.rows[r][c] = null;
+      LD.app.invalidateWork();
       LD.app.recomputeDesc();
+      LD.app.persist();
+    },
+    descGroup(el) {
+      st().descGroup = el.value;
+      renderDescTable();
       LD.app.persist();
     },
     ocrCell(el) {
@@ -1107,6 +1335,8 @@
       if (el.id === 'annotMode') an.mode = el.value;
       if (el.id === 'annotTest') an.test = el.value;
       if (el.id === 'annotAdj') an.adj = el.value;
+      // 用户手动改标注方式后，就不再沿用上一次检验的来源
+      an.sourceId = null;
       renderCanvas();
       LD.app.persist();
     },
@@ -1137,7 +1367,8 @@
         h('li', '正态性：同时给出 Shapiro–Wilk（n ≤ 5000）与 D\'Agostino–Pearson K²（n ≥ 8），两者不一致时以 Shapiro–Wilk 为主。'),
         h('li', '相关：Pearson 要求线性且近似正态；关系为单调非线性时请看 Spearman ρ。'),
         h('li', '回归：报告 R²、调整 R²、F 检验、各系数 t 检验与 VIF，并检查残差自相关（Durbin–Watson）。'),
-        h('li', '效应量：t 检验给 Cohen\'s d / Hedges\' g，方差分析给 η² / ω²，秩和检验给 r / ε²。')),
+        h('li', '效应量：t 检验给 Cohen\'s d / Hedges\' g，方差分析给 η² / ω²，秩和检验给 r / ε²。'),
+        h('li', '每次检验都会保留在「分析结果」里。点「出图」可直接把分组变量、响应变量与两两比较结果带到图表页，显著性括号用的就是这次检验的校正后 p 值，不会另算一套。')),
       h('h4', '关于图表'),
       h('ul',
         h('li', '图幅按毫米设置（单栏常用 85 mm，双栏 170 mm），字号以 pt 计，与期刊排版一致。'),
@@ -1346,6 +1577,8 @@
       return;
     }
     renderTestResult();
+    renderResults();
+    renderTestHint();
   }
 
   function handleFiles(files) {

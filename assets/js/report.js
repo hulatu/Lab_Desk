@@ -94,7 +94,7 @@
     let sec = 1;
     const hasPipe = state.pipeline && state.pipeline.length;
     const hasCurve = state.curveAnalysis && state.curveAnalysis.series && state.curveAnalysis.series.length;
-    const hasTest = state.lastTest && state.lastTest.render;
+    const hasTest = (state.results && state.results.length) || (state.lastTest && state.lastTest.render);
 
     parts.push(`<h1>${esc(ds ? ds.name : '未命名数据集')} · 数据分析报告</h1>`);
     parts.push(`<p class="muted">生成时间：${esc(now)}　|　工具：LabDesk 科研数据台</p>`);
@@ -136,35 +136,41 @@
 
     if (hasTest) {
       sec++;
-      const r = state.lastTest.render;
-      parts.push(`<h2>${sec} 统计分析：${esc(r.title || '')}</h2>`);
-      if (r.stats && r.stats.length) {
-        parts.push('<table><thead><tr><th>指标</th><th>数值</th></tr></thead><tbody>'
-          + r.stats.map((s) => `<tr><td>${esc(s.k)}</td><td class="num">${esc(s.v)}</td></tr>`).join('')
-          + '</tbody></table>');
-      }
-      if (r.table) {
-        const tTitle = r.table.title || (r.table.columns && r.table.columns[0] === '比较' ? '两两比较' : '统计表');
-        parts.push(`<h3>${esc(tTitle)}</h3><table><thead><tr>`
-          + r.table.columns.map((c) => `<th>${esc(c)}</th>`).join('')
-          + '</tr></thead><tbody>'
-          + r.table.rows.map((row) => '<tr>' + row.map((c) => `<td class="num">${esc(c)}</td>`).join('') + '</tr>').join('')
-          + '</tbody></table>');
-      }
-      if (r.table2) {
-        parts.push(`<h3>${esc(r.table2.title || '两两比较')}</h3><table><thead><tr>`
-          + r.table2.columns.map((c) => `<th>${esc(c)}</th>`).join('')
-          + '</tr></thead><tbody>'
-          + r.table2.rows.map((row) => '<tr>' + row.map((c) => `<td class="num">${esc(c)}</td>`).join('') + '</tr>').join('')
-          + '</tbody></table>');
-      }
-      if (r.notes && r.notes.length) {
-        parts.push('<h3>前提检查</h3><ul>');
-        r.notes.forEach((n) => parts.push(`<li>${esc(n)}</li>`));
-        parts.push('</ul>');
-      }
-      if (r.conclusion) parts.push(`<p><strong>结论：</strong>${esc(r.conclusion)}</p>`);
-      if (r.text) parts.push(`<h3>规范表述</h3><p>${esc(r.text)}</p>`);
+      parts.push(`<h2>${sec} 统计分析</h2>`);
+      const tests = state.results && state.results.length
+        ? state.results
+        : (state.lastTest ? [state.lastTest] : []);
+      tests.forEach((t, ti) => {
+        const r = (t && t.render) || {};
+        parts.push(`<h3>${esc(r.title || ('分析 ' + (ti + 1)))}</h3>`);
+        if (r.stats && r.stats.length) {
+          parts.push('<table><thead><tr><th>指标</th><th>数值</th></tr></thead><tbody>'
+            + r.stats.map((s) => `<tr><td>${esc(s.k)}</td><td class="num">${esc(s.v)}</td></tr>`).join('')
+            + '</tbody></table>');
+        }
+        if (r.table) {
+          const tTitle = r.table.title || (r.table.columns && r.table.columns[0] === '比较' ? '两两比较' : '统计表');
+          parts.push(`<h4>${esc(tTitle)}</h4><table><thead><tr>`
+            + r.table.columns.map((c) => `<th>${esc(c)}</th>`).join('')
+            + '</tr></thead><tbody>'
+            + r.table.rows.map((row) => '<tr>' + row.map((c) => `<td class="num">${esc(c)}</td>`).join('') + '</tr>').join('')
+            + '</tbody></table>');
+        }
+        if (r.table2) {
+          parts.push(`<h4>${esc(r.table2.title || '两两比较')}</h4><table><thead><tr>`
+            + r.table2.columns.map((c) => `<th>${esc(c)}</th>`).join('')
+            + '</tr></thead><tbody>'
+            + r.table2.rows.map((row) => '<tr>' + row.map((c) => `<td class="num">${esc(c)}</td>`).join('') + '</tr>').join('')
+            + '</tbody></table>');
+        }
+        if (r.notes && r.notes.length) {
+          parts.push('<h4>前提检查</h4><ul>');
+          r.notes.forEach((n) => parts.push(`<li>${esc(n)}</li>`));
+          parts.push('</ul>');
+        }
+        if (r.conclusion) parts.push(`<p><strong>结论：</strong>${esc(r.conclusion)}</p>`);
+        if (r.text) parts.push(`<h4>规范表述</h4><p>${esc(r.text)}</p>`);
+      });
       if (state.interpretation) parts.push(`<h3>AI 解读</h3><p>${esc(state.interpretation).replace(/\n/g, '<br>')}</p>`);
     }
 
@@ -257,21 +263,24 @@
       });
     }
     L.push('');
-    if (state.lastTest && state.lastTest.render) {
-      const r = state.lastTest.render;
-      L.push(`## 统计分析：${r.title || ''}`);
-      L.push('');
-      if (r.stats) r.stats.forEach((s) => L.push(`- ${s.k}：${s.v}`));
-      L.push('');
-      if (r.notes && r.notes.length) {
-        L.push('**前提检查**');
+    if ((state.results && state.results.length) || (state.lastTest && state.lastTest.render)) {
+      const tests = state.results && state.results.length ? state.results : [state.lastTest];
+      tests.forEach((t, ti) => {
+        const r = (t && t.render) || {};
+        L.push(`## 统计分析${tests.length > 1 ? ' ' + (ti + 1) : ''}：${r.title || ''}`);
         L.push('');
-        r.notes.forEach((n) => L.push(`- ${n}`));
+        if (r.stats) r.stats.forEach((s) => L.push(`- ${s.k}：${s.v}`));
         L.push('');
-      }
-      if (r.conclusion) L.push(`**结论：** ${r.conclusion}`);
-      L.push('');
-      if (r.text) { L.push('**规范表述**'); L.push(''); L.push(r.text); L.push(''); }
+        if (r.notes && r.notes.length) {
+          L.push('**前提检查**');
+          L.push('');
+          r.notes.forEach((n) => L.push(`- ${n}`));
+          L.push('');
+        }
+        if (r.conclusion) L.push(`**结论：** ${r.conclusion}`);
+        L.push('');
+        if (r.text) { L.push('**规范表述**'); L.push(''); L.push(r.text); L.push(''); }
+      });
       if (state.interpretation) { L.push('**AI 解读**'); L.push(''); L.push(state.interpretation); L.push(''); }
     }
     return L.join('\n');

@@ -259,6 +259,7 @@
         <div class="card-head">
           <h2>数据体检</h2>
           <span class="tag" id="auditSummary">检查中…</span>
+          <div class="head-tools"><button class="btn ghost sm" id="btnAuditFix" data-act="cleanAutoFix" hidden>一键修复</button></div>
         </div>
         <div id="auditList" class="audit-list"></div>
       </div>
@@ -373,7 +374,13 @@
       </div>
 
       <div class="card">
-        <div class="card-head"><h2>描述统计</h2><div class="head-tools"><button class="btn ghost sm" id="btnDescAll">全部数值列</button></div></div>
+        <div class="card-head"><h2>描述统计</h2>
+          <div class="head-tools">
+            <select id="descGroup" class="mini-select" data-change="descGroup" title="按分类变量分组统计"></select>
+            <button class="btn ghost sm" id="btnDescAll">全部数值列</button>
+            <button class="btn ghost sm" data-act="copyDesc">复制表</button>
+          </div>
+        </div>
         <div class="table-wrap" id="descTable"></div>
       </div>
 
@@ -386,8 +393,17 @@
           <label class="field" id="testXWrap" hidden><span>第二变量 / 配对列</span><select id="testX"></select></label>
           <label class="field"><span>显著性水平 α</span><select id="testAlpha"><option>0.05</option><option>0.01</option><option>0.001</option></select></label>
           <button class="btn primary" id="btnRunTest">运行分析</button>
+          <div class="test-hint" id="testHint"></div>
         </div>
         <div id="testResult" class="result-pane muted">选择变量后运行分析。</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>分析结果</h2><span class="tag" id="resultsCount">0</span>
+          <div class="head-tools"><button class="btn ghost sm" data-act="clearResults">清空</button></div>
+        </div>
+        <p class="muted small" style="margin:-2px 0 10px">每次检验的结果都会保留在这里。点「出图」会把该次检验的分组、两两比较与显著性水平原样带到图表页，不再重算一套标注。</p>
+        <div id="resultsList" class="results-list"></div>
       </div>
 
       <div class="card">

@@ -213,6 +213,24 @@
     if (!bound) bindPanel();
   }
 
+  /* 只把「不改变数据含义」的修复纳入一键处理：删空列 / 删常数列 / 文本转数值。
+     缺失值到底该填中位数还是删行、重复行是否真的是重复测量，都必须由人来判断。 */
+  const SAFE_FIX_OPS = { dropcol: 1, settype: 1 };
+  function safeFixes(issues) {
+    const seen = new Set();
+    const out = [];
+    (issues || []).forEach((it) => {
+      (it.fixes || []).forEach((f) => {
+        if (!SAFE_FIX_OPS[f.op]) return;
+        const sig = f.op + '|' + JSON.stringify(f.params);
+        if (seen.has(sig)) return;
+        seen.add(sig);
+        out.push({ type: f.op, params: f.params, label: it.title });
+      });
+    });
+    return out;
+  }
+
   function renderAudit(ds) {
     const box = document.getElementById('auditList');
     const tag = document.getElementById('auditSummary');
@@ -223,6 +241,13 @@
     if (tag) {
       tag.textContent = pending ? `${pending} 项建议处理` : '未发现影响分析的问题';
       tag.className = 'tag' + (pending ? ' warn' : ' ok');
+    }
+    const fixBtn = document.getElementById('btnAuditFix');
+    const safe = safeFixes(issues);
+    if (fixBtn) {
+      fixBtn.hidden = !safe.length;
+      fixBtn.textContent = `一键修复 ${safe.length} 项`;
+      fixBtn.title = safe.map((f) => f.label).join('\n');
     }
 
     box.innerHTML = '';
@@ -247,8 +272,7 @@
     }
   }
 
-  function auditRow(it) {
-    const fixes = h('div.audit-fixes');
+  function auditRow(it) {    const fixes = h('div.audit-fixes');
     (it.fixes || []).forEach((f, k) => {
       fixes.appendChild(h('button.btn.sm' + (k === 0 ? '.primary' : '.ghost'),
         {
@@ -568,6 +592,32 @@
       try { input.setSelectionRange(pos, pos); } catch (err) { /* 部分浏览器只读 */ }
       opValues.derive = Object.assign({}, opValues.derive, { expr: input.value });
       refreshEstimate(defByKey('derive'), opValues.derive, app.workDataset());
+      return;
+    }
+    if (act === 'cleanAutoFix') {
+      const ds = app.workDataset();
+      const issues = audit(ds).filter((it) => !dismissed.has(it.title));
+      const fixes = safeFixes(issues);
+      if (!fixes.length) { U.toast('没有可以自动处理的问题', 'warn'); return; }
+      U.modal(`一键修复 ${fixes.length} 项`,
+        h('div',
+          h('p', '下面这些改动不改变数据含义，将作为整理步骤依次应用（可随时撤回）：'),
+          h('ul', { style: { margin: '6px 0 0 18px', lineHeight: '1.7' } }, fixes.map((f) => h('li', f.label)))),
+        [
+          { label: '取消' },
+          {
+            label: `应用 ${fixes.length} 项`,
+            primary: true,
+            onClick: () => {
+              try {
+                app.pushOps(fixes.map((f) => ({ type: f.type, params: f.params })));
+                U.toast(`已应用 ${fixes.length} 项修复`, 'ok');
+              } catch (err) {
+                U.toast('修复失败：' + err.message, 'err', 6000);
+              }
+            },
+          },
+        ]);
       return;
     }
     if (act === 'cleanFix') {

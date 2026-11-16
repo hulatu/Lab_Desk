@@ -784,7 +784,7 @@
   }
 
   function boxOption(ctx) {
-    const { ds, enc, style } = ctx;
+    const { ds, enc, style, annot } = ctx;
     const g = groupSeries(ds, enc.x, enc.y);
     if (!g) return null;
     const st = baseStyle(style);
@@ -792,6 +792,8 @@
       const sx = arr.slice().sort((a, b) => a - b);
       return [sx[0], S.quantile(sx, 0.25), S.quantile(sx, 0.5), S.quantile(sx, 0.75), sx[sx.length - 1]];
     });
+    const dataMax = Math.max(...g.groups.flat());
+    const top = annot && annot.length ? Math.max(dataMax, ...annot.map((a) => a.y || 0)) : null;
     return {
       animation: false,
       backgroundColor: '#fff',
@@ -806,7 +808,7 @@
         splitLine: { show: false },
       },
       yAxis: {
-        type: 'value', scale: true,
+        type: 'value', scale: true, max: top === null ? undefined : niceCeil(top * 1.02),
         ...yNameBlock(style, axisName(style, 'y', enc.y)),
         axisLine: { show: style.borderBox, lineStyle: st.axisLine.lineStyle },
         axisTick: { ...st.axisTick, inside: style.tickIn },
@@ -818,7 +820,7 @@
         boxWidth: [8, 42],
         itemStyle: { color: U.alpha(st.pal[0], 0.28), borderColor: st.pal[0], borderWidth: style.lineWidth },
         emphasis: { itemStyle: { borderWidth: style.lineWidth * 1.6 } },
-      }],
+      }].concat(annot && annot.length ? [bracketSeries(annot, style)] : []),
       tooltip: { show: false },
     };
   }
@@ -838,7 +840,7 @@
   }
 
   function violinOption(ctx) {
-    const { ds, enc, style } = ctx;
+    const { ds, enc, style, annot } = ctx;
     const g = groupSeries(ds, enc.x, enc.y);
     if (!g) return null;
     const st = baseStyle(style);
@@ -871,7 +873,9 @@
         splitLine: { show: false },
       },
       yAxis: {
-        type: 'value', min: Math.floor((lo - pad) * 10) / 10, max: Math.ceil((hi + pad) * 10) / 10,
+        type: 'value', min: Math.floor((lo - pad) * 10) / 10,
+        max: Math.max(Math.ceil((hi + pad) * 10) / 10,
+          annot && annot.length ? niceCeil(Math.max(hi, ...annot.map((a) => a.y || 0)) * 1.02) : -Infinity),
         ...yNameBlock(style, axisName(style, 'y', enc.y)),
         axisLine: { show: style.borderBox, lineStyle: st.axisLine.lineStyle },
         axisTick: { ...st.axisTick, inside: style.tickIn },
@@ -912,7 +916,7 @@
             ],
           };
         },
-      }],
+      }].concat(annot && annot.length ? [bracketSeries(annot, style)] : []),
       tooltip: { show: false },
     };
   }
@@ -1072,24 +1076,41 @@
   }
 
   /* ==================== 显著性计算（供标注使用） ==================== */
-  function computeAnnotations(ds, enc, mode, testMethod, adj, alpha) {
+  /**
+   * opts.rows 传入时，直接使用上一次检验得到的两两比较结果，
+   * 不再按图表的 X/Y 重新算一套——这是「检验 → 出图」能对上的关键。
+   */
+  function computeAnnotations(ds, enc, mode, testMethod, adj, alpha, opts) {
     if (mode === 'none') return { list: [], note: '' };
+    const o = opts || {};
     const xi = colOf(ds, enc.x), yi = colOf(ds, enc.y);
     if (!xi || !yi) return { list: [], note: '' };
     const g = groupSeries(ds, enc.x, enc.y);
     if (!g || g.labels.length < 2) return { list: [], note: '至少需要两个分组才能做两两比较' };
 
-    let method = testMethod;
-    if (method === 'auto') {
-      const normal = g.groups.map((arr) => {
-        const r = S.shapiroWilk(arr);
-        return r ? r.p : 1;
-      });
-      const allNormal = normal.every((p) => p > 0.05);
-      const lev = S.levene(g.groups);
-      method = allNormal && lev && lev.p > 0.05 ? 'welch' : 'mw';
+    let rows;
+    let method;
+    let note;
+    if (o.rows && o.rows.length) {
+      rows = o.rows.filter((r) => g.labels.includes(r.a) && g.labels.includes(r.b));
+      method = o.method || '';
+      note = o.note || '';
+      if (!rows.length) return { list: [], rows: [], note: '检验结果的分组与当前图表不一致，请重新选择 X/Y 或清除标注来源。' };
+    } else {
+      method = testMethod;
+      if (method === 'auto') {
+        const normal = g.groups.map((arr) => {
+          const r = S.shapiroWilk(arr);
+          return r ? r.p : 1;
+        });
+        const allNormal = normal.every((p) => p > 0.05);
+        const lev = S.levene(g.groups);
+        method = allNormal && lev && lev.p > 0.05 ? 'welch' : 'mw';
+      }
+      rows = S.pairwise(g.groups, g.labels, { method, adjust: adj });
+      const sigCount = rows.filter((r) => r.pAdj < alpha).length;
+      note = `${method === 'mw' ? 'Mann–Whitney U' : 'Welch t'} 两两比较，${adj === 'none' ? '未校正' : adj === 'bonf' ? 'Bonferroni' : 'Holm'} 校正；${sigCount}/${rows.length} 对差异显著（α = ${alpha}）`;
     }
-    const rows = S.pairwise(g.groups, g.labels, { method, adjust: adj });
     const useP = mode === 'p';
     // 依 y 轴数值范围放置括号
     const all = g.groups.flat();
@@ -1103,12 +1124,11 @@
       text: useP ? `p = ${U.fmtP(r.pAdj)}` : U.stars(r.pAdj),
       p: r.pAdj, raw: r.p, a: r.a, b: r.b,
     }));
-    const sigCount = rows.filter((r) => r.pAdj < alpha).length;
     return {
       list,
       rows,
       method,
-      note: `${method === 'mw' ? 'Mann–Whitney U' : 'Welch t'} 两两比较，${adj === 'none' ? '未校正' : adj === 'bonf' ? 'Bonferroni' : 'Holm'} 校正；${sigCount}/${rows.length} 对差异显著（α = ${alpha}）`,
+      note,
       ymax: list.length ? Math.max(...list.map((l) => l.y)) : null,
     };
   }

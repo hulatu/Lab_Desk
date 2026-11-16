@@ -62,9 +62,11 @@
       style: Object.assign({}, LD.charts.STYLE_DEFAULTS),
     },
     curve: defaultCurveState(),
-    annot: { mode: 'none', test: 'auto', adj: 'holm', alpha: 0.05 },
+    annot: { mode: 'none', test: 'auto', adj: 'holm', alpha: 0.05, sourceId: null },
     descRows: [],
+    descGroup: '',        // 描述统计的分组变量（空 = 不分组）
     lastTest: null,
+    results: [],          // 最近的分析结果；不只保留最后一次
     interpretation: '',
     ocr: { image: null, table: null, notes: '' },
     reportHtml: '',
@@ -82,12 +84,27 @@
     const e = activeEntry();
     return e ? e.pipeline : [];
   }
+
+  /* 派生数据缓存：一次渲染里 workDataset() 会被调用十几次，
+     每次都重跑整条流水线在几万行数据上会明显卡顿。 */
+  let wsCache = { key: '', val: null };
+  function pipelineKey() {
+    const e = activeEntry();
+    if (!e) return '';
+    const p = e.pipeline;
+    return e.id + '|' + p.length + '|' + (p.length ? p[p.length - 1].id : '');
+  }
   function workDataset() {
     const raw = rawDataset();
     if (!raw) return null;
+    const key = pipelineKey();
+    if (wsCache.key === key) return wsCache.val;
     const res = LD.ops.apply(raw, pipeline());
+    wsCache = { key, val: res.dataset };
     return res.dataset;
   }
+  /** 直接改动了原始数据（如单元格编辑、重新推断类型）后必须调用 */
+  function invalidateWork() { wsCache = { key: '', val: null }; }
 
   function numNames(ds) {
     return ds ? ds.columns.filter((c) => c.type === 'number').map((c) => c.name) : [];
@@ -100,6 +117,7 @@
   function addDataset(ds, opts) {
     const o = opts || {};
     const entry = { id: ds.id, ds, pipeline: [] };
+    invalidateWork();
     state.datasets.push(entry);
     state.activeId = ds.id;
     state.descRows = [];
@@ -127,9 +145,9 @@
   function setActive(id) {
     state.activeId = id;
     state.descRows = [];
-    state.lastTest = null;
     state.interpretation = '';
     state.curve.fit.result = null;
+    state.lastTest = visibleResults()[0] || null;
     recomputeDesc();
     initChartEncodings();
     initCurveEncodings();
@@ -150,6 +168,19 @@
     if (!e) return;
     e.pipeline.push({ type, params, id: U.uid(), at: Date.now() });
     afterPipelineChange();
+  }
+
+  /** 一次性追加多条整理操作，只在最后重算/重绘一次（批量修复用） */
+  function pushOps(list) {
+    const e = activeEntry();
+    if (!e || !list || !list.length) return 0;
+    list.forEach((o) => {
+      const type = o.type || o.op;
+      if (!type) return;
+      e.pipeline.push({ type, params: o.params || {}, id: U.uid(), at: Date.now() });
+    });
+    afterPipelineChange();
+    return list.length;
   }
 
   function undo() {
@@ -175,9 +206,13 @@
   }
 
   function afterPipelineChange() {
-    state.lastTest = null;
     state.interpretation = '';
     state.curve.fit.result = null;
+    invalidateWork();
+    // 整理步骤变了，之前的结果就不再对应当前数据：从结果工作台隐藏，也不能再作为标注来源
+    const vis = visibleResults();
+    state.lastTest = vis[0] || null;
+    if (state.annot.sourceId && !vis.some((r) => r.id === state.annot.sourceId)) state.annot.sourceId = null;
     recomputeDesc();
     initChartEncodings(true);
     initCurveEncodings(true);
@@ -482,6 +517,12 @@
               : `未发现两组秩分布存在统计学差异（p = ${U.fmtP(r.p)}）。`,
             level: r.p < alpha ? 'ok' : 'warn',
             text: `Mann–Whitney U 检验显示，${params.groupA || labels[0]} 组（Mdn = ${U.fmt(r.median1, 3)}）与 ${params.groupB || labels[1]} 组（Mdn = ${U.fmt(r.median2, 3)}）差异${r.p < alpha ? '显著' : '不显著'}，U = ${U.fmt(r.U, 1)}, p ${r.p < 0.001 ? '< .001' : '= ' + U.fmtP(r.p).replace(/^0/, '')}, r = ${U.fmt(r.r, 2)}。`,
+            pairs: [{
+              a: params.groupA || labels[0], b: params.groupB || labels[1],
+              diff: r.median1 - r.median2, stat: r.U, statName: 'U',
+              p: r.p, pAdj: r.p,
+            }],
+            spec: { family: familyKey, y: params.y, g: params.g, alpha, adjust: 'none', method: 'mw' },
           };
           break;
         }
@@ -510,6 +551,12 @@
             : `两组均值差异未达统计学显著（p = ${U.fmtP(r.p)}）。`,
           level: r.p < alpha ? 'ok' : 'warn',
           text: `${welch ? 'Welch 校正' : '独立样本'} t 检验显示，${params.groupA || labels[0]} 组（M = ${U.fmt(r.m1, 3)}, SD = ${U.fmt(r.sd1, 3)}）与 ${params.groupB || labels[1]} 组（M = ${U.fmt(r.m2, 3)}, SD = ${U.fmt(r.sd2, 3)}）差异${r.p < alpha ? '显著' : '不显著'}，t(${U.fmt(r.df, 1)}) = ${U.fmt(r.t, 2)}, p ${r.p < 0.001 ? '< .001' : '= ' + U.fmtP(r.p).replace(/^0/, '')}, d = ${U.fmt(r.d, 2)}。`,
+          pairs: [{
+            a: params.groupA || labels[0], b: params.groupB || labels[1],
+            diff: r.diff, stat: r.t, statName: 't', df: r.df,
+            p: r.p, pAdj: r.p,
+          }],
+          spec: { family: familyKey, y: params.y, g: params.g, alpha, adjust: 'none', method: welch ? 'welch' : 'pooled' },
         };
         break;
       }
@@ -599,6 +646,8 @@
             conclusion: r.p < alpha ? `至少有一组的分布与其他组不同（p = ${U.fmtP(r.p)}），见下方两两比较。` : `各组分布无统计学差异（p = ${U.fmtP(r.p)}）。`,
             level: r.p < alpha ? 'ok' : 'warn',
             text: `Kruskal–Wallis 检验显示，不同 ${params.g} 下 ${params.y} 的分布差异${r.p < alpha ? '显著' : '不显著'}，H(${r.df}) = ${U.fmt(r.H, 2)}, p ${r.p < 0.001 ? '< .001' : '= ' + U.fmtP(r.p).replace(/^0/, '')}。`,
+            pairs: pw,
+            spec: { family: familyKey, y: params.y, g: params.g, alpha, adjust: 'holm', method: 'mw' },
           };
           break;
         }
@@ -645,6 +694,8 @@
             : `不同 ${params.g} 之间未发现统计学差异（p = ${U.fmtP(r.p)}）。`,
           level: r.p < alpha ? 'ok' : 'warn',
           text: `单因素方差分析显示，不同 ${params.g} 下 ${params.y} 差异${r.p < alpha ? '显著' : '不显著'}，F(${r.df1}, ${r.df2}) = ${U.fmt(r.F, 2)}, p ${r.p < 0.001 ? '< .001' : '= ' + U.fmtP(r.p).replace(/^0/, '')}, η² = ${U.fmt(r.eta2, 2)}。`,
+          pairs: pw,
+          spec: { family: familyKey, y: params.y, g: params.g, alpha, adjust: 'holm', method },
         };
         break;
       }
@@ -680,6 +731,7 @@
             : `未发现 ${params.y} 与 ${params.x} 的线性相关（r = ${U.fmt(pr.r, 3)}，p = ${U.fmtP(pr.p)}）。`,
           level: pr.p < alpha ? 'ok' : 'warn',
           text: `${params.y} 与 ${params.x} 呈${pr.p < alpha ? (pr.r > 0 ? '显著正相关' : '显著负相关') : '不显著的'}关系，r(${pr.df}) = ${U.fmt(pr.r, 2)}, p ${pr.p < 0.001 ? '< .001' : '= ' + U.fmtP(pr.p).replace(/^0/, '')}。`,
+          spec: { family: 'corr', y: params.y, x: params.x, g: null, alpha },
         };
         break;
       }
@@ -723,6 +775,7 @@
             : `回归模型整体不显著（p = ${U.fmtP(fit.pF)}），不宜据此做预测。`,
           level: fit.pF < alpha ? 'ok' : 'warn',
           text: `多元线性回归模型${fit.pF < alpha ? '显著' : '不显著'}，F(${fit.dfModel}, ${fit.dfErr}) = ${U.fmt(fit.F, 2)}, p ${fit.pF < 0.001 ? '< .001' : '= ' + U.fmtP(fit.pF).replace(/^0/, '')}, 调整 R² = ${U.fmt(fit.adjR2, 2)}。`,
+          spec: { family: 'reg', y: params.y, xs, g: null, alpha },
         };
         break;
       }
@@ -764,10 +817,110 @@
     }
 
     if (!render) return null;
-    state.lastTest = { family: familyKey, params, render, at: Date.now() };
+    const key = state.activeId + '|' + pipelineKey() + '|' + familyKey + '|' + JSON.stringify(params);
+    const oldIdx = state.results.findIndex((r) => r.key === key);
+    const entry = {
+      id: oldIdx >= 0 ? state.results[oldIdx].id : U.uid(),
+      key, family: familyKey, params, render, at: Date.now(),
+      datasetId: state.activeId,
+    };
+    if (oldIdx >= 0) state.results.splice(oldIdx, 1);
+    state.results.unshift(entry);
+    state.results = state.results.slice(0, 20);
+    state.lastTest = entry;
     state.interpretation = '';
     persist();
-    return state.lastTest;
+    return entry;
+  }
+
+  function resultById(id) {
+    return state.results.find((r) => r.id === id) || null;
+  }
+
+  /** 当前数据集 + 当前整理流水线的结果键前缀 */
+  function resultKeyPrefix() {
+    return state.activeId ? state.activeId + '|' + pipelineKey() + '|' : '';
+  }
+
+  /** 当前数据集的、且数据没被后续整理改过的分析结果 */
+  function visibleResults() {
+    const prefix = resultKeyPrefix();
+    return state.results.filter((r) => {
+      if (r.datasetId && r.datasetId !== state.activeId) return false;
+      // 整理步骤变更后旧结果先隐藏（撤销整理还能再看到），避免拿旧数据的 p 值出图
+      if (r.key && prefix && r.key.indexOf(prefix) !== 0) return false;
+      return true;
+    });
+  }
+
+  function removeResult(id) {
+    state.results = state.results.filter((r) => r.id !== id);
+    if (state.lastTest && state.lastTest.id === id) state.lastTest = visibleResults()[0] || null;
+    if (state.annot.sourceId === id) state.annot.sourceId = null;
+    persist();
+    LD.ui.renderAll();
+  }
+
+  function clearResults() {
+    state.results = [];
+    state.lastTest = null;
+    state.annot.sourceId = null;
+    persist();
+    LD.ui.renderAll();
+  }
+
+  /**
+   * 把一次检验的结果直接承接成图表：分组检验 → 柱状/箱线/小提琴，
+   * 相关/回归 → 散点 + 拟合线。显著性标注沿用该检验的两两比较结果，
+   * 不再让图表页自己重算一套。
+   */
+  function plotTestResult(id, kind) {
+    const r = id ? resultById(id) : state.lastTest;
+    if (!r || !r.render || !r.render.spec) {
+      U.toast('这个结果没有可用的变量信息，无法直接出图。', 'warn');
+      return false;
+    }
+    if (r.datasetId && r.datasetId !== state.activeId) {
+      U.toast('这个结果属于另一个数据集，请先切换到对应数据集再出图。', 'warn');
+      return false;
+    }
+    const spec = r.render.spec;
+    const k = kind || 'bar';
+
+    if (!spec.g) {
+      if ((spec.family === 'corr' || spec.family === 'reg') && r.params) {
+        state.chart.type = 'scatter';
+        state.chart.enc.x = spec.family === 'corr' ? r.params.x : (r.params.xs || [])[0] || null;
+        state.chart.enc.y = r.params.y;
+        state.chart.enc.series = null;
+        state.chart.style.fitLine = true;
+        state.annot.mode = 'none';
+        state.annot.sourceId = null;
+        ensureEncodings();
+        go('chart');
+        U.toast('已按回归/相关结果生成散点图', 'ok');
+        return true;
+      }
+      U.toast('这个检验没有分组变量，暂时无法直接出图。', 'warn');
+      return false;
+    }
+
+    state.chart.type = ['bar', 'box', 'violin'].includes(k) ? k : 'bar';
+    state.chart.enc.x = spec.g;
+    state.chart.enc.y = spec.y;
+    state.chart.enc.series = null;
+    state.chart.enc.agg = 'mean';
+    if (state.chart.type === 'bar') state.chart.style.errType = 'sd';
+    state.annot.mode = (r.render.pairs && r.render.pairs.length) ? 'stars' : 'none';
+    state.annot.test = spec.method === 'mw' ? 'mw' : 'welch';
+    state.annot.adj = spec.adjust || 'holm';
+    state.annot.alpha = spec.alpha || 0.05;
+    state.annot.sourceId = r.id;
+    ensureEncodings();
+    go('chart');
+    const label = { bar: '柱状图（均值 ± 标准差）', box: '箱线图', violin: '小提琴图' }[state.chart.type] || '图表';
+    U.toast(`已按「${r.render.title}」生成${label}`, 'ok', 4200);
+    return true;
   }
 
   /* ---------- 持久化 ---------- */
@@ -785,6 +938,8 @@
           chart: state.chart,
           curve: curveSnapshot(),
           annot: state.annot,
+          results: state.results,
+          descGroup: state.descGroup,
         };
         const json = JSON.stringify(payload);
         if (json.length > 4.5 * 1024 * 1024) {
@@ -811,6 +966,7 @@
       if (!raw) return false;
       const data = JSON.parse(raw);
       if (!data || !Array.isArray(data.datasets) || !data.datasets.length) return false;
+      invalidateWork();
       state.datasets = data.datasets.map((e) => ({ id: e.ds.id, ds: e.ds, pipeline: e.pipeline || [] }));
       state.activeId = state.datasets.some((d) => d.id === data.activeId) ? data.activeId : state.datasets[0].id;
       if (data.chart) {
@@ -819,6 +975,9 @@
         state.chart.style = Object.assign({}, LD.charts.STYLE_DEFAULTS, data.chart.style || {});
       }
       if (data.annot) state.annot = Object.assign(state.annot, data.annot);
+      state.descGroup = data.descGroup || '';
+      state.results = Array.isArray(data.results) ? data.results.slice(0, 20) : [];
+      state.lastTest = visibleResults()[0] || null;
       if (data.curve) state.curve = mergeCurve(data.curve);
       recomputeDesc();
       initChartEncodings(true);
@@ -836,6 +995,7 @@
       app: 'LabDesk', version: 1, savedAt: new Date().toISOString(),
       datasets: state.datasets.map((e) => ({ ds: e.ds, pipeline: e.pipeline })),
       activeId: state.activeId, chart: state.chart, curve: curveSnapshot(), annot: state.annot,
+      results: state.results, descGroup: state.descGroup,
     };
     U.download('labdesk-project-' + new Date().toISOString().slice(0, 10) + '.json',
       JSON.stringify(payload, null, 1), 'application/json');
@@ -844,6 +1004,7 @@
   function importProject(text) {
     const data = JSON.parse(text);
     if (!data || !Array.isArray(data.datasets)) throw new Error('不是有效的 LabDesk 工程文件');
+    invalidateWork();
     state.datasets = data.datasets.map((e) => ({ id: e.ds.id || U.uid(), ds: e.ds, pipeline: e.pipeline || [] }));
     state.activeId = state.datasets.length ? state.datasets[0].id : null;
     if (data.chart) {
@@ -852,6 +1013,9 @@
       state.chart.style = Object.assign({}, LD.charts.STYLE_DEFAULTS, data.chart.style || {});
     }
     if (data.curve) state.curve = mergeCurve(data.curve);
+    state.descGroup = data.descGroup || '';
+    state.results = Array.isArray(data.results) ? data.results.slice(0, 20) : [];
+    state.lastTest = visibleResults()[0] || null;
     recomputeDesc();
     initChartEncodings(true);
     initCurveEncodings(true);
@@ -915,9 +1079,10 @@
   LD.app = {
     state, FAMILIES,
     activeEntry, rawDataset, pipeline, workDataset, numNames, catNames,
-    addDataset, removeDataset, setActive, go, pushOp, undo, removeOp, clearPipeline,
+    addDataset, removeDataset, setActive, go, pushOp, pushOps, undo, removeOp, clearPipeline,
     afterPipelineChange, recomputeDesc, initChartEncodings, ensureEncodings,
     initCurveEncodings, curveAnalysis, defaultCurveState, mergeCurve,
+    invalidateWork, resultById, visibleResults, removeResult, clearResults, plotTestResult,
     runTest, persist, restore, clearProject, exportProject, importProject,
     exportCsv, exportXlsx, toMatrix,
     get working() { return workDataset(); },
