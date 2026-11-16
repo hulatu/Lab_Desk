@@ -823,7 +823,7 @@
           };
         } else stale = true;
       }
-      const res = LD.charts.computeAnnotations(ds, st().chart.enc, an.mode, an.test, an.adj, an.alpha, opts);
+      const res = LD.charts.computeAnnotations(ds, st().chart.enc, an.mode, an.test, an.adj, an.alpha, opts, an.scope || 'sig');
       annot = res.list;
       st()._annotNote = (stale ? '原检验结果与当前 X/Y 不一致，已按当前图表重新计算。' : '') + res.note;
       st()._annotRows = res.rows;
@@ -876,6 +876,8 @@
     $('#annotMode').value = an.mode;
     $('#annotTest').value = an.test;
     $('#annotAdj').value = an.adj;
+    const onlyEl = $('#annotScope');
+    if (onlyEl) onlyEl.value = an.scope || 'sig';
     const fromTest = !!(an.sourceId && LD.app.resultById(an.sourceId));
     ['annotMode', 'annotTest', 'annotAdj'].forEach((id) => {
       const el = $('#' + id);
@@ -1332,6 +1334,12 @@
     },
     annotChange(el) {
       const an = st().annot;
+      if (el.id === 'annotScope') {
+        an.scope = el.value;
+        renderCanvas();
+        LD.app.persist();
+        return;
+      }
       if (el.id === 'annotMode') an.mode = el.value;
       if (el.id === 'annotTest') an.test = el.value;
       if (el.id === 'annotAdj') an.adj = el.value;
@@ -1511,7 +1519,7 @@
     $('#btnChartCode').addEventListener('click', () => handlers.chartCode());
     $('#btnStyleReset').addEventListener('click', () => handlers.resetStyle());
 
-    ['annotMode', 'annotTest', 'annotAdj'].forEach((id) => {
+    ['annotMode', 'annotTest', 'annotAdj', 'annotScope'].forEach((id) => {
       const el = $('#' + id);
       if (el) el.addEventListener('change', () => changeHandlers.annotChange(el));
     });

@@ -62,7 +62,7 @@
       style: Object.assign({}, LD.charts.STYLE_DEFAULTS),
     },
     curve: defaultCurveState(),
-    annot: { mode: 'none', test: 'auto', adj: 'holm', alpha: 0.05, sourceId: null },
+    annot: { mode: 'none', test: 'auto', adj: 'holm', alpha: 0.05, sourceId: null, scope: 'sig' },
     descRows: [],
     descGroup: '',        // 描述统计的分组变量（空 = 不分组）
     lastTest: null,

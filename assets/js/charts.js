@@ -440,7 +440,16 @@
             { type: 'line', shape: { x1: p1[0], y1: y, x2: p2[0], y2: y }, style: { stroke: '#333', lineWidth: lw } },
             { type: 'line', shape: { x1: p1[0], y1: y, x2: p1[0], y2: y + h }, style: { stroke: '#333', lineWidth: lw } },
             { type: 'line', shape: { x1: p2[0], y1: y, x2: p2[0], y2: y + h }, style: { stroke: '#333', lineWidth: lw } },
-            { type: 'text', style: { text: String(text), x: (p1[0] + p2[0]) / 2, y: y - 3 * (style.k || 1), textAlign: 'center', textVerticalAlign: 'bottom', fill: '#222', fontSize: st.fontSize, fontFamily: style.fontFamily } },
+            {
+              type: 'text',
+              style: {
+                text: String(text), x: (p1[0] + p2[0]) / 2, y: y - 3 * (style.k || 1),
+                textAlign: 'center', textVerticalAlign: 'bottom',
+                fill: '#222', fontSize: st.fontSize, fontFamily: style.fontFamily,
+                // 白底把穿过的括号线盖住，星号不会和线条糊在一起
+                backgroundColor: 'rgba(255,255,255,0.92)', padding: [1, 2],
+              },
+            },
           ],
         };
       },
@@ -1080,7 +1089,7 @@
    * opts.rows 传入时，直接使用上一次检验得到的两两比较结果，
    * 不再按图表的 X/Y 重新算一套——这是「检验 → 出图」能对上的关键。
    */
-  function computeAnnotations(ds, enc, mode, testMethod, adj, alpha, opts) {
+  function computeAnnotations(ds, enc, mode, testMethod, adj, alpha, opts, scope) {
     if (mode === 'none') return { list: [], note: '' };
     const o = opts || {};
     const xi = colOf(ds, enc.x), yi = colOf(ds, enc.y);
@@ -1111,19 +1120,68 @@
       const sigCount = rows.filter((r) => r.pAdj < alpha).length;
       note = `${method === 'mw' ? 'Mann–Whitney U' : 'Welch t'} 两两比较，${adj === 'none' ? '未校正' : adj === 'bonf' ? 'Bonferroni' : 'Holm'} 校正；${sigCount}/${rows.length} 对差异显著（α = ${alpha}）`;
     }
+
     const useP = mode === 'p';
-    // 依 y 轴数值范围放置括号
+    const sc = scope || 'sig';
+    const sigCount = rows.filter((r) => r.pAdj < alpha).length;
+    let draw;
+    if (sc === 'ref') {
+      /* 六组以上时，15 对全画出来一定会堆成梯子。只和对照组比是论文里最常见的做法。 */
+      const ref = g.labels[0];
+      draw = rows.filter((r) => r.a === ref || r.b === ref);
+    } else if (sc === 'all') {
+      draw = rows.slice();
+    } else {
+      draw = rows.filter((r) => r.pAdj < alpha);
+    }
+
+    /* 括号排版：先按跨度从短到长排序，再放进「同一层互不重叠」的最低层。
+       六组数据有 15 对比较，如果按比较顺序逐条往上堆，括号会叠成一堵墙；
+       分层之后相邻比较落在同一层，长跨度放在更高层，读数最清楚。 */
+    draw = draw
+      .map((r) => {
+        let i = g.labels.indexOf(r.a), j = g.labels.indexOf(r.b);
+        if (i > j) { const t = i; i = j; j = t; }
+        return { r, i, j };
+      })
+      .filter((d) => d.i >= 0 && d.j >= 0 && d.i !== d.j)
+      .sort((a, b) => (a.j - a.i) - (b.j - b.i) || a.i - b.i);
+
+    const levels = [];
+    draw.forEach((d) => {
+      let lv = 0;
+      /* 端点相接的相邻比较可以放在同一层：A–B 与 B–C 共用 B 处的竖线，
+         视觉上是一条带刻度的横线，比把每一对单独抬高一层紧凑得多。 */
+      while (levels[lv] && levels[lv].some((iv) => !(d.j <= iv[0] || d.i >= iv[1]))) lv++;
+      (levels[lv] = levels[lv] || []).push([d.i, d.j]);
+      d.level = lv;
+    });
+
     const all = g.groups.flat();
     const ymax = Math.max(...all);
     const ymin = Math.min(...all);
     const step = (ymax - ymin) * 0.09 || 1;
-    const list = rows.map((r, i) => ({
-      i: g.labels.indexOf(r.a),
-      j: g.labels.indexOf(r.b),
-      y: ymax + step * (1.0 + i * 1.8),
-      text: useP ? `p = ${U.fmtP(r.pAdj)}` : U.stars(r.pAdj),
-      p: r.pAdj, raw: r.p, a: r.a, b: r.b,
+    const list = draw.map((d) => ({
+      i: d.i,
+      j: d.j,
+      level: d.level,
+      y: ymax + step * (0.6 + d.level * 1.35),
+      text: useP ? `p = ${U.fmtP(d.r.pAdj)}` : U.stars(d.r.pAdj),
+      p: d.r.pAdj, raw: d.r.p, a: d.r.a, b: d.r.b,
     }));
+
+    let layoutNote = '';
+    if (sc === 'sig') {
+      layoutNote = sigCount
+        ? `仅标注显著的 ${sigCount} 对（共 ${rows.length} 对）`
+        : `没有任何一对达到 α = ${alpha} 的显著水平，未绘制括号；把「比较范围」改成「全部两两比较」可查看 ns`;
+    } else if (sc === 'ref') {
+      layoutNote = `仅与第一组「${g.labels[0]}」比较，共 ${draw.length} 对（${draw.filter((r) => r.pAdj < alpha).length} 对显著）`;
+    } else {
+      layoutNote = `显示全部 ${rows.length} 对比较（${sigCount} 对显著）`;
+    }
+    if (layoutNote) note = note ? note + '；' + layoutNote : layoutNote;
+
     return {
       list,
       rows,
