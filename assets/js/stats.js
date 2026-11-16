@@ -581,6 +581,65 @@
     return rows;
   }
 
+  /**
+   * 用「插入-吸收」法把两两比较结果转成 a/b/c 字母标记（compact letter display）。
+   * 共享字母 = 差异不显著，字母完全不同 = 差异显著。
+   * 比在一张图上堆十几条括号干净得多，是农学、生态、药理论文的常见写法。
+   */
+  function compactLetters(labels, rows, alpha) {
+    const n = labels.length;
+    if (!n) return {};
+    const a = Number(alpha) || 0.05;
+    const sig = labels.map(() => new Array(n).fill(false));
+    (rows || []).forEach((r) => {
+      if (!(r.pAdj < a)) return;
+      const i = labels.indexOf(r.a), j = labels.indexOf(r.b);
+      if (i >= 0 && j >= 0 && i !== j) { sig[i][j] = true; sig[j][i] = true; }
+    });
+
+    let cols = [labels.map((_, i) => i)];
+    for (let guard = 0; guard < 500; guard++) {
+      let changed = false;
+      for (let c = 0; c < cols.length && !changed; c++) {
+        const col = cols[c];
+        for (let x = 0; x < col.length && !changed; x++) {
+          for (let y = x + 1; y < col.length && !changed; y++) {
+            if (!sig[col[x]][col[y]]) continue;
+            // 一对显著差异无法共享字母：拆成「去掉一个」的两列继续处理
+            cols.splice(c, 1, col.filter((k) => k !== col[x]), col.filter((k) => k !== col[y]));
+            changed = true;
+          }
+        }
+      }
+      if (!changed) break;
+    }
+
+    const keyOf = (col) => col.slice().sort((x, y) => x - y).join(',');
+    const uniq = [];
+    const seen = new Set();
+    cols.forEach((col) => {
+      if (!col.length) return;
+      const k = keyOf(col);
+      if (seen.has(k)) return;
+      seen.add(k);
+      uniq.push(col.slice().sort((x, y) => x - y));
+    });
+    // 被其他列完全包含的列没有提供新信息，去掉
+    const kept = uniq.filter((col, idx) =>
+      !uniq.some((other, jdx) => jdx !== idx && other.length > col.length && col.every((k) => other.indexOf(k) >= 0)));
+
+    kept.sort((x, y) => x[0] - y[0] || y.length - x.length);
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+    const out = {};
+    labels.forEach((l) => { out[l] = ''; });
+    kept.forEach((col, ci) => {
+      const ch = alphabet[ci] || '#';
+      col.forEach((k) => { out[labels[k]] += ch; });
+    });
+    Object.keys(out).forEach((k) => { out[k] = out[k].split('').sort().join(''); });
+    return out;
+  }
+
   /* ==================== 相关 ==================== */
   function pearson(a, b) {
     const n = Math.min(a.length, b.length);
@@ -809,7 +868,7 @@
     shapiroWilk, dagostino, normality, levene,
     tTestOne, tTestTwo, tTestPaired, mannWhitney, wilcoxon,
     mannWhitneyExact, wilcoxonExact,
-    oneWayAnova, kruskalWallis, adjustP, pairwise,
+    oneWayAnova, kruskalWallis, adjustP, pairwise, compactLetters,
     pearson, spearman, corrMatrix, ols, chiSquare,
     cohensD, hedgesG, effectLabel,
     groupBy, contingency, rankWithTies,

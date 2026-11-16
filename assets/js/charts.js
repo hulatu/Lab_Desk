@@ -456,9 +456,45 @@
     };
   }
 
+  /** 把 a/b/c 字母放到每个柱/箱/小提琴的上方 */
+  function letterItems(labels, tops, letters, pad) {
+    if (!letters || !letters.map) return null;
+    const items = [];
+    labels.forEach((l, i) => {
+      const text = letters.map[String(l)];
+      if (!text) return;
+      items.push({ i, y: tops[i] + pad, text });
+    });
+    return items.length ? items : null;
+  }
+
+  function letterSeries(items, style) {
+    if (!items || !items.length) return null;
+    const st = baseStyle(style);
+    return {
+      type: 'custom',
+      name: '__letters',
+      z: 30,
+      silent: true,
+      data: items.map((it) => [it.i, it.y, it.text]),
+      renderItem: (params, api) => {
+        const i = api.value(0), yv = api.value(1), text = api.value(2);
+        const p = api.coord([i, yv]);
+        return {
+          type: 'text',
+          style: {
+            text: String(text), x: p[0], y: p[1],
+            textAlign: 'center', textVerticalAlign: 'bottom',
+            fill: '#111', fontSize: st.fontSize, fontFamily: style.fontFamily, fontWeight: 'bold',
+          },
+        };
+      },
+    };
+  }
+
   /* ==================== 柱状图 ==================== */
   function barOption(ctx, horizontal, mode) {
-    const { ds, enc, style, annot } = ctx;
+    const { ds, enc, style, annot, letters } = ctx;
     const agg = aggregate(ds, enc.x, enc.y, mode === 'stack' || mode === 'pct' ? enc.series : enc.series, enc.agg || 'mean', style.errType);
     if (!agg) return null;
     const st = baseStyle(style);
@@ -529,6 +565,22 @@
       series.push(custom);
     }
 
+    /* 字母标记：贴在误差棒顶端上方，比堆十几条括号干净 */
+    let letterTop = null;
+    if (letters && letters.map && !horizontal && seriesData.length === 1) {
+      const tops = cats.map((c, i) => {
+        const p = seriesData[0].points[i];
+        return p && p.mean !== null ? (p.mean + (p.err || 0)) : 0;
+      });
+      const top = Math.max(...tops, 0);
+      const pad = top * 0.06 || 1;
+      const items = letterItems(cats, tops, letters, pad);
+      if (items) {
+        series.push(letterSeries(items, style));
+        letterTop = Math.max(...items.map((it) => it.y));
+      }
+    }
+
     const catName = axisName(style, horizontal ? 'y' : 'x', enc.x);
     const valName = axisName(style, horizontal ? 'x' : 'y', mode === 'pct' ? '占比 (%)' : enc.y);
     const plainAxisName = (text) => ({ name: text, nameLocation: 'middle', nameGap: st.gapX, nameTextStyle: st.nameStyle });
@@ -551,9 +603,9 @@
     if (mode === 'pct') { valAxis.max = 100; valAxis.min = 0; }
 
     const maxVal = Math.max(...seriesData.map((se) => Math.max(...se.points.map((p) => (p.mean || 0) + (p.err || 0)))), 0);
-    if (annot && annot.length && !horizontal) {
-      const topY = Math.max(maxVal, ...annot.map((a) => a.y || 0));
-      valAxis.max = niceCeil(topY * 1.06);
+    if ((annot && annot.length) || letterTop !== null) {
+      const topY = Math.max(maxVal, letterTop || 0, ...(annot || []).map((a) => a.y || 0));
+      valAxis.max = niceCeil(topY * (annot && annot.length ? 1.06 : 1.1));
     }
 
     const bracket = bracketSeries(annot, style);
@@ -793,7 +845,7 @@
   }
 
   function boxOption(ctx) {
-    const { ds, enc, style, annot } = ctx;
+    const { ds, enc, style, annot, letters } = ctx;
     const g = groupSeries(ds, enc.x, enc.y);
     if (!g) return null;
     const st = baseStyle(style);
@@ -801,8 +853,22 @@
       const sx = arr.slice().sort((a, b) => a - b);
       return [sx[0], S.quantile(sx, 0.25), S.quantile(sx, 0.5), S.quantile(sx, 0.75), sx[sx.length - 1]];
     });
-    const dataMax = Math.max(...g.groups.flat());
-    const top = annot && annot.length ? Math.max(dataMax, ...annot.map((a) => a.y || 0)) : null;
+    const flat = g.groups.flat();
+    const dataMax = Math.max(...flat);
+    const dataMin = Math.min(...flat);
+    let letterTop = null, letterSer = null;
+    if (letters && letters.map) {
+      const tops = g.groups.map((arr) => Math.max(...arr));
+      const pad = (dataMax - dataMin) * 0.05 || 1;
+      const items = letterItems(g.labels, tops, letters, pad);
+      if (items) {
+        letterTop = Math.max(...items.map((it) => it.y));
+        letterSer = letterSeries(items, style);
+      }
+    }
+    const top = Math.max(
+      annot && annot.length ? Math.max(dataMax, ...annot.map((a) => a.y || 0)) : -Infinity,
+      letterTop === null ? -Infinity : letterTop);
     return {
       animation: false,
       backgroundColor: '#fff',
@@ -817,7 +883,7 @@
         splitLine: { show: false },
       },
       yAxis: {
-        type: 'value', scale: true, max: top === null ? undefined : niceCeil(top * 1.02),
+        type: 'value', scale: true, max: isFinite(top) ? niceCeil(top * 1.06) : undefined,
         ...yNameBlock(style, axisName(style, 'y', enc.y)),
         axisLine: { show: style.borderBox, lineStyle: st.axisLine.lineStyle },
         axisTick: { ...st.axisTick, inside: style.tickIn },
@@ -829,7 +895,9 @@
         boxWidth: [8, 42],
         itemStyle: { color: U.alpha(st.pal[0], 0.28), borderColor: st.pal[0], borderWidth: style.lineWidth },
         emphasis: { itemStyle: { borderWidth: style.lineWidth * 1.6 } },
-      }].concat(annot && annot.length ? [bracketSeries(annot, style)] : []),
+      }]
+        .concat(annot && annot.length ? [bracketSeries(annot, style)] : [])
+        .concat(letterSer ? [letterSer] : []),
       tooltip: { show: false },
     };
   }
@@ -849,13 +917,22 @@
   }
 
   function violinOption(ctx) {
-    const { ds, enc, style, annot } = ctx;
+    const { ds, enc, style, annot, letters } = ctx;
     const g = groupSeries(ds, enc.x, enc.y);
     if (!g) return null;
     const st = baseStyle(style);
     const all = g.groups.flat();
     const lo = Math.min(...all), hi = Math.max(...all);
     const pad = (hi - lo) * 0.05 || 1;
+    let letterTop = null, letterSer = null;
+    if (letters && letters.map) {
+      const tops = g.groups.map((arr) => Math.max(...arr));
+      const items = letterItems(g.labels, tops, letters, pad);
+      if (items) {
+        letterTop = Math.max(...items.map((it) => it.y));
+        letterSer = letterSeries(items, style);
+      }
+    }
     const grid = [];
     const STEPS = 60;
     for (let i = 0; i <= STEPS; i++) grid.push(lo - pad + (hi - lo + 2 * pad) * i / STEPS);
@@ -884,7 +961,8 @@
       yAxis: {
         type: 'value', min: Math.floor((lo - pad) * 10) / 10,
         max: Math.max(Math.ceil((hi + pad) * 10) / 10,
-          annot && annot.length ? niceCeil(Math.max(hi, ...annot.map((a) => a.y || 0)) * 1.02) : -Infinity),
+          annot && annot.length ? niceCeil(Math.max(hi, ...annot.map((a) => a.y || 0)) * 1.02) : -Infinity,
+          letterTop === null ? -Infinity : niceCeil(letterTop * 1.06)),
         ...yNameBlock(style, axisName(style, 'y', enc.y)),
         axisLine: { show: style.borderBox, lineStyle: st.axisLine.lineStyle },
         axisTick: { ...st.axisTick, inside: style.tickIn },
@@ -925,7 +1003,9 @@
             ],
           };
         },
-      }].concat(annot && annot.length ? [bracketSeries(annot, style)] : []),
+      }]
+        .concat(annot && annot.length ? [bracketSeries(annot, style)] : [])
+        .concat(letterSer ? [letterSer] : []),
       tooltip: { show: false },
     };
   }
@@ -1186,6 +1266,7 @@
       list,
       rows,
       method,
+      labels: g.labels,
       note,
       ymax: list.length ? Math.max(...list.map((l) => l.y)) : null,
     };

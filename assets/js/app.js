@@ -911,7 +911,7 @@
     state.chart.enc.series = null;
     state.chart.enc.agg = 'mean';
     if (state.chart.type === 'bar') state.chart.style.errType = 'sd';
-    state.annot.mode = (r.render.pairs && r.render.pairs.length) ? 'stars' : 'none';
+    state.annot.mode = (r.render.pairs && r.render.pairs.length) ? 'letters' : 'none';
     state.annot.test = spec.method === 'mw' ? 'mw' : 'welch';
     state.annot.adj = spec.adjust || 'holm';
     state.annot.alpha = spec.alpha || 0.05;

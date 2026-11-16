@@ -805,16 +805,21 @@
     if (!ds) return null;
     const type = st().chart.type;
     let annot = null;
+    let letters = null;
     const an = st().annot;
     if (an.mode !== 'none' && ['bar', 'barH', 'box', 'violin'].includes(type)) {
       let opts = null;
       let stale = false;
+      let srcSpec = null;
+      let srcPairs = null;
       if (an.sourceId) {
         const src = LD.app.resultById(an.sourceId);
         const spec = src && src.render && src.render.spec;
         const pairs = src && src.render && src.render.pairs;
         if (src && spec && pairs && pairs.length
           && spec.g === st().chart.enc.x && spec.y === st().chart.enc.y) {
+          srcSpec = spec;
+          srcPairs = pairs;
           const sig = pairs.filter((r) => r.pAdj < an.alpha).length;
           const adjLabel = spec.adjust === 'none' ? '未校正' : spec.adjust === 'bonf' ? 'Bonferroni' : 'Holm';
           opts = {
@@ -823,14 +828,33 @@
           };
         } else stale = true;
       }
-      const res = LD.charts.computeAnnotations(ds, st().chart.enc, an.mode, an.test, an.adj, an.alpha, opts, an.scope || 'sig');
-      annot = res.list;
-      st()._annotNote = (stale ? '原检验结果与当前 X/Y 不一致，已按当前图表重新计算。' : '') + res.note;
-      st()._annotRows = res.rows;
+      if (an.mode === 'letters') {
+        /* 字母标记需要「所有组两两比较」的完整矩阵；来源检验只比较了两组时（如 Mann–Whitney），
+           就按同一方法与校正重新补全，否则缺失的比较会被误当成「无差异」。 */
+        const method = srcSpec && srcSpec.method ? srcSpec.method : an.test;
+        const full = LD.charts.computeAnnotations(ds, st().chart.enc, 'stars', method, an.adj, an.alpha, null, 'all');
+        const need = (full.labels || []).length * ((full.labels || []).length - 1) / 2;
+        const complete = !!(opts && srcPairs && srcPairs.length >= need);
+        const res = complete
+          ? LD.charts.computeAnnotations(ds, st().chart.enc, 'stars', method, an.adj, an.alpha, opts, 'all')
+          : full;
+        letters = { map: LD.stats.compactLetters(res.labels || [], res.rows || [], an.alpha) };
+        annot = [];
+        const adjLabel = an.adj === 'none' ? '未校正' : an.adj === 'bonf' ? 'Bonferroni' : 'Holm';
+        st()._annotNote = (stale ? '原检验结果与当前 X/Y 不一致，已按当前图表重新计算。' : '')
+          + (complete ? (opts.note || '') : (res.note || ''))
+          + `；柱子上方字母不同表示差异显著，共享字母表示差异不显著（${adjLabel} 校正，α = ${an.alpha}）。`;
+        st()._annotRows = res.rows;
+      } else {
+        const res = LD.charts.computeAnnotations(ds, st().chart.enc, an.mode, an.test, an.adj, an.alpha, opts, an.scope || 'sig');
+        annot = res.list;
+        st()._annotNote = (stale ? '原检验结果与当前 X/Y 不一致，已按当前图表重新计算。' : '') + res.note;
+        st()._annotRows = res.rows;
+      }
     } else {
       st()._annotNote = '';
     }
-    return { ds, type, enc: st().chart.enc, style: st().chart.style, annot };
+    return { ds, type, enc: st().chart.enc, style: st().chart.style, annot, letters };
   }
 
   function renderCanvas() {
@@ -877,7 +901,11 @@
     $('#annotTest').value = an.test;
     $('#annotAdj').value = an.adj;
     const onlyEl = $('#annotScope');
-    if (onlyEl) onlyEl.value = an.scope || 'sig';
+    if (onlyEl) {
+      onlyEl.value = an.scope || 'sig';
+      onlyEl.disabled = an.mode === 'letters';
+      onlyEl.title = an.mode === 'letters' ? '字母标记使用全部两两比较，不需要比较范围' : '';
+    }
     const fromTest = !!(an.sourceId && LD.app.resultById(an.sourceId));
     ['annotMode', 'annotTest', 'annotAdj'].forEach((id) => {
       const el = $('#' + id);
@@ -1376,7 +1404,7 @@
         h('li', '相关：Pearson 要求线性且近似正态；关系为单调非线性时请看 Spearman ρ。'),
         h('li', '回归：报告 R²、调整 R²、F 检验、各系数 t 检验与 VIF，并检查残差自相关（Durbin–Watson）。'),
         h('li', '效应量：t 检验给 Cohen\'s d / Hedges\' g，方差分析给 η² / ω²，秩和检验给 r / ε²。'),
-        h('li', '每次检验都会保留在「分析结果」里。点「出图」可直接把分组变量、响应变量与两两比较结果带到图表页，显著性括号用的就是这次检验的校正后 p 值，不会另算一套。')),
+        h('li', '每次检验都会保留在「分析结果」里。点「出图」可直接把分组变量、响应变量与两两比较结果带到图表页，显著性标注默认用 a/b/c 字母：共享字母表示差异不显著，字母完全不同表示显著，组数多时比括号干净得多。')),
       h('h4', '关于图表'),
       h('ul',
         h('li', '图幅按毫米设置（单栏常用 85 mm，双栏 170 mm），字号以 pt 计，与期刊排版一致。'),
